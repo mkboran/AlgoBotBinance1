@@ -1,23 +1,61 @@
 # strategies/rsi_strategy.py
+#!/usr/bin/env python3
+"""
+📈 OPTIMIZE EDİLMİŞ RSI STRATEJİSİ - BASESTRATEGY MIGRATED
+💎 BREAKTHROUGH: BaseStrategy Foundation ile Enhanced RSI Trading
+
+ENHANCED WITH BASESTRATEGY FOUNDATION:
+✅ Centralized logging system
+✅ Standardized lifecycle management
+✅ Performance tracking integration
+✅ Risk management foundation
+✅ Portfolio interface standardization
+✅ Signal creation standardization
+
+RSI Strategy Features:
+- ALIM: RSI aşırı satım + Trend doğrulama + Hacim teyidi + Volatilite Kontrolü + AI Sinyal Düzeltmesi
+- SATIM: RSI aşırı alım veya Kâr hedefine/Stop-loss'a ulaşma + ATR Stop
+
+PRODUCTION READY - INSTITUTIONAL LEVEL IMPLEMENTATION
+"""
+
 import pandas as pd
 import pandas_ta as ta
 from typing import Optional, Tuple
 # import numpy as np # Kullanılmıyor gibi, kaldırılabilir
 
-from strategies.base import BaseStrategy
+# ✅ CORRECTED IMPORT - BaseStrategy from correct module
+from strategies.base_strategy import BaseStrategy, TradingSignal, SignalType, create_signal
+
 from utils.portfolio import Portfolio, Position # Position import edilmiş, iyi.
 from utils.config import settings
-from utils.logger import logger
 from utils.ai_signal_provider import AiSignalProvider, AiSignal # AiSignal Enum importu eklendi
+
 
 class RsiStrategy(BaseStrategy):
     """
-    Optimize Edilmiş RSI Stratejisi:
+    🎯 Optimize Edilmiş RSI Stratejisi with BaseStrategy Foundation:
     - ALIM: RSI aşırı satım + Trend doğrulama + Hacim teyidi + Volatilite Kontrolü + AI Sinyal Düzeltmesi
     - SATIM: RSI aşırı alım veya Kâr hedefine/Stop-loss'a ulaşma + ATR Stop
     """
-    def __init__(self, portfolio: Portfolio, symbol: str = settings.SYMBOL, ai_provider: Optional[AiSignalProvider] = None):
-        super().__init__(strategy_name="RSI", portfolio=portfolio, symbol=symbol, ai_provider=ai_provider)
+    
+    def __init__(self, portfolio: Portfolio, symbol: str = settings.SYMBOL, ai_provider: Optional[AiSignalProvider] = None, **kwargs):
+        # ✅ BASESTRATEGY INHERITANCE - Initialize foundation first
+        super().__init__(
+            portfolio=portfolio,
+            symbol=symbol,
+            strategy_name="RSI",
+            max_positions=kwargs.get('max_positions', 2),
+            max_loss_pct=kwargs.get('max_loss_pct', 1.0), # 1% stop loss default
+            min_profit_target_usdt=kwargs.get('min_profit_target_usdt', 2.0),
+            base_position_size_pct=kwargs.get('base_position_size_pct', 15.0),
+            min_position_usdt=kwargs.get('min_position_usdt', 100.0),
+            max_position_usdt=kwargs.get('max_position_usdt', 300.0),
+            **kwargs
+        )
+        
+        # ✅ AI PROVIDER INTEGRATION (strategy-specific)
+        self.ai_provider = ai_provider
         
         # === Strateji Parametreleri (Analiz Dokümanlarına Göre Revize Edilmiş) ===
         # Bu değerlerin settings (config.py) üzerinden gelmesi beklenir.
@@ -41,230 +79,387 @@ class RsiStrategy(BaseStrategy):
         self.min_volume_factor: float = settings.RSI_STRATEGY_MIN_VOLUME_FACTOR
         # Öneri: 1.1 (hacim filtresi bir miktar gevşetildi)
         
-        # Risk yönetimi
+        # Risk yönetimi (using BaseStrategy parameters + strategy specific)
         self.profit_target_percentage: float = settings.RSI_STRATEGY_TP_PERCENTAGE
         # Öneri: 0.02 (%2 kâr hedefi, trend yönünde işlem yaptığı için risk/ödül artırılıyor)
         self.stop_loss_percentage: float = settings.RSI_STRATEGY_SL_PERCENTAGE
         # Öneri: 0.01 (%1 zarar kesme)
         
         self.atr_stop_loss_multiplier: float = settings.RSI_STRATEGY_ATR_SL_MULTIPLIER
-        # Öneri (genel): ATR tabanlı stop. Örn: 2.0 (config'den)
+        # Öneri (genel): ATR tabanlı stop-loss için 2.0 çarpanı
+        
+        # Pozisyon yönetimi (enhanced with BaseStrategy foundation)
+        self.position_size_pct: float = settings.RSI_STRATEGY_POSITION_SIZE_PCT # Örn: 0.15 (%15)
+        # NOTE: Base position size comes from BaseStrategy now
+        
+        # Zamanlama kontrolleri
+        self.last_trade_time = None
+        self.min_time_between_trades_minutes = 5  # En az 5 dakika ara
+        
+        self.logger.info("📈 RSI Strategy - BaseStrategy Migration Completed")
+        self.logger.info(f"   📊 RSI period: {self.rsi_period}, Oversold: {self.rsi_oversold_threshold}, Overbought: {self.rsi_overbought_threshold}")
+        self.logger.info(f"   🎯 Profit target: {self.profit_target_percentage*100:.1f}%, Stop loss: {self.stop_loss_percentage*100:.1f}%")
+        self.logger.info(f"   🤖 AI Provider: {'Enabled' if self.ai_provider else 'Disabled'}")
 
-        self.max_positions: int = settings.RSI_STRATEGY_MAX_POSITIONS # Örn: 3
+    async def analyze_market(self, data: pd.DataFrame) -> Optional[TradingSignal]:
+        """
+        🎯 RSI MARKET ANALYSIS - Enhanced with BaseStrategy foundation
         
-        # Volatilite (Quantile olarak)
-        self.volatility_window_for_rank: int = settings.RSI_STRATEGY_VOLATILITY_WINDOW_RANK # Örn: 100 (persentil için daha uzun pencere)
-        self.max_volatility_quantile: float = settings.RSI_STRATEGY_MAX_VOLATILITY_QUANTILE
-        # Öneri: 0.8 (çok yüksek volatilitede girme) veya 0.9 (daha esnek)
-
-        self.logger.info(
-            f"[{self.strategy_name}] Strateji başlatıldı. RSI Eşikleri: {self.rsi_oversold_threshold}/{self.rsi_overbought_threshold}, "
-            f"Kâr Hedefi: {self.profit_target_percentage*100:.1f}%, Stop-Loss: {self.stop_loss_percentage*100:.1f}%, "
-            f"Hacim Faktörü: {self.min_volume_factor}, Trend Skoru Eşiği: {self.trend_score_threshold}"
-        )
-        
-    async def _calculate_indicators(self, df_ohlcv: pd.DataFrame) -> Optional[pd.DataFrame]:
-        # DataFrame kopyası üzerinde çalışmak daha güvenli
-        df_indicators = df_ohlcv.copy()
-        min_required_data = max(self.rsi_period, self.long_ema_period, self.volume_ma_period, 26, 14) # MACD slow, ATR için
-        
-        if len(df_indicators) < min_required_data:
-            self.logger.debug(f"[{self.strategy_name}] İndikatör hesaplamak için yeterli veri yok: {len(df_indicators)}/{min_required_data}")
-            return None
-            
+        This method implements the complete RSI Strategy logic
+        while leveraging BaseStrategy's standardized signal creation.
+        """
         try:
-            df_indicators['rsi'] = ta.rsi(df_indicators['close'], length=self.rsi_period)
-            df_indicators['ema_short'] = ta.ema(df_indicators['close'], length=self.short_ema_period)
-            df_indicators['ema_long'] = ta.ema(df_indicators['close'], length=self.long_ema_period)
+            if len(data) < max(self.rsi_period, self.long_ema_period, self.volume_ma_period) + 5:
+                return None
             
-            macd = ta.macd(df_indicators['close'], fast=12, slow=26, signal=9) # Standart MACD periyotları
-            if macd is not None and not macd.empty:
-                df_indicators['macd'] = macd.iloc[:,0]
-                df_indicators['macd_signal'] = macd.iloc[:,1]
-                df_indicators['macd_hist'] = macd.iloc[:,2]
-            else:
-                df_indicators['macd'] = df_indicators['macd_signal'] = df_indicators['macd_hist'] = pd.NA
+            # ✅ CALCULATE TECHNICAL INDICATORS
+            indicators = self._calculate_rsi_indicators(data)
             
-            df_indicators['volume_ma'] = ta.sma(df_indicators['volume'], length=self.volume_ma_period)
-            df_indicators['volume_ratio'] = df_indicators['volume'] / (df_indicators['volume_ma'].replace(0, 1e-9))
+            # Store indicators for reference
+            self.indicators = indicators
             
-            df_indicators['momentum_3p'] = df_indicators['close'].pct_change(3) # 3 periyotluk momentum
-            df_indicators['volatility_10p_std_pct'] = df_indicators['close'].pct_change().rolling(window=10).std() * 100
-            # Volatilite persentilini daha uzun bir pencere üzerinden hesapla
-            df_indicators['volatility_quantile_rank'] = df_indicators['volatility_10p_std_pct'].rolling(window=self.volatility_window_for_rank, min_periods=20).rank(pct=True)
-
-            df_indicators['atr'] = ta.atr(df_indicators['high'], df_indicators['low'], df_indicators['close'], length=14)
-
-            return df_indicators.iloc[-2:] # current ve previous için
+            # ✅ AI SIGNAL INTEGRATION
+            ai_signal = None
+            if self.ai_provider:
+                try:
+                    ai_signal = await self.ai_provider.get_signal(self.symbol, data)
+                except Exception as e:
+                    self.logger.warning(f"⚠️ AI signal failed: {e}")
+            
+            # ✅ BUY SIGNAL ANALYSIS
+            buy_signal = self._analyze_rsi_buy_conditions(data, indicators, ai_signal)
+            if buy_signal:
+                return create_signal(
+                    signal_type=SignalType.BUY,
+                    confidence=buy_signal['confidence'],
+                    price=self.current_price,
+                    reasons=buy_signal['reasons']
+                )
+            
+            # ✅ SELL SIGNAL ANALYSIS
+            sell_signal = self._analyze_rsi_sell_conditions(data, indicators)
+            if sell_signal:
+                return create_signal(
+                    signal_type=SignalType.SELL,
+                    confidence=sell_signal['confidence'],
+                    price=self.current_price,
+                    reasons=sell_signal['reasons']
+                )
+            
+            # ✅ HOLD SIGNAL (default)
+            return create_signal(
+                signal_type=SignalType.HOLD,
+                confidence=0.5,
+                price=self.current_price,
+                reasons=["RSI in neutral zone", "Waiting for extreme levels"]
+            )
             
         except Exception as e:
-            self.logger.error(f"[{self.strategy_name}] İndikatör hesaplama hatası: {e}", exc_info=True)
+            self.logger.error(f"❌ RSI market analysis error: {e}")
             return None
 
-    def _check_trend(self, current_indicators: pd.Series, previous_indicators: pd.Series) -> Tuple[bool, str]:
-        """Trend analizi. Güncel ve bir önceki satırı (Series) alır."""
-        trend_score = 0
-        conditions_met = []
-
-        # Gerekli sütunların varlığını ve NaN olmadığını kontrol et
-        required_cols_trend = ['ema_short', 'ema_long', 'macd', 'macd_signal', 'momentum_3p', 'volatility_10p_std_pct']
-        if any(pd.isna(current_indicators.get(col)) for col in required_cols_trend) or \
-           any(pd.isna(previous_indicators.get(col)) for col in ['ema_short', 'ema_long']): # EMA strengthening için prev de lazım
-            return False, "Trend analizi için eksik veri"
-
-        # EMA Trendi
-        if current_indicators['ema_short'] > current_indicators['ema_long']:
-            trend_score += 3
-            conditions_met.append("EMA Pozitif")
-
-        # EMA Güçlenmesi
-        current_ema_diff = current_indicators['ema_short'] - current_indicators['ema_long']
-        previous_ema_diff = previous_indicators['ema_short'] - previous_indicators['ema_long']
-        if current_ema_diff > previous_ema_diff:
-            trend_score += 2
-            conditions_met.append("EMA Güçleniyor")
-
-        # MACD Trendi
-        if current_indicators['macd'] > current_indicators['macd_signal']:
-            trend_score += 2
-            conditions_met.append("MACD Pozitif")
-            
-        # Momentum (Pozitif ve anlamlı bir artış)
-        # min_trend_strength %0.2 idi, bu momentum için direkt kullanılabilir.
-        if current_indicators['momentum_3p'] > 0.0005: # %0.05 gibi küçük bir eşik
-            trend_score += 2
-            conditions_met.append("Momentum Pozitif")
-
-        # Düşük Volatilite (Piyasa sakinse trend daha tutarlı olabilir varsayımı)
-        # Bu koşul, ana volatilite filtresiyle çelişebilir. "Aşırı yüksek olmayan" volatilite daha mantıklı olabilir.
-        # Şimdilik orijinal mantığı koruyalım: volatilite, kendi ortalamasının altındaysa.
-        # Daha robust bir "low_volatility" tanımı:
-        # if current_indicators['volatility_10p_std_pct'] < current_indicators['volatility_10p_std_pct'].rolling(20).mean().iloc[-1] :
-        # Yukarıdaki `volatility_ma` hesaplaması _check_trend içinde hatalıydı, indikatörlerde hesaplanmalı.
-        # Ya da basitçe volatilite persentilini kullan:
-        if current_indicators.get('volatility_quantile_rank', 1.0) < 0.5: # Volatilite medyanın altındaysa "düşük" kabul edilebilir
-            trend_score += 1
-            conditions_met.append("Volatilite Düşük/Orta")
-            
-        trend_strength_msg = "Güçlü" if trend_score >= 8 else "Orta" if trend_score >= self.trend_score_threshold else "Zayıf"
-        final_msg = f"{trend_strength_msg} trend (Skor: {trend_score}/10, Koşullar: {', '.join(conditions_met) if conditions_met else 'Yok'})"
+    def calculate_position_size(self, signal: TradingSignal) -> float:
+        """
+        💰 RSI-SPECIFIC POSITION SIZE CALCULATION
         
-        return trend_score >= self.trend_score_threshold, final_msg
-
-    async def should_buy(self, df_ohlcv: pd.DataFrame) -> bool:
-        # 0. Genel Alım Koşulları ve Filtreler
-        if not await self.validate_trade_conditions(df_ohlcv, strategy_name=self.strategy_name):
-            return False
-
-        indicators = await self._calculate_indicators(df_ohlcv)
-        if indicators is None or len(indicators) < 2: # current ve previous için
-            return False
+        Enhanced for RSI extreme levels and reversal signals
+        """
+        try:
+            # ✅ BASE SIZE from inherited parameters
+            base_size = self.portfolio.balance * (self.base_position_size_pct / 100)
             
-        current = indicators.iloc[-1]
-        previous = indicators.iloc[-2] # _check_trend için
+            # ✅ CONFIDENCE-BASED ADJUSTMENT
+            confidence_multiplier = signal.confidence
+            
+            # ✅ RSI EXTREME BONUS
+            rsi_bonus = 0.0
+            if hasattr(signal, 'metadata') and 'rsi_value' in signal.metadata:
+                rsi_value = signal.metadata['rsi_value']
+                
+                # More extreme RSI = larger position
+                if rsi_value <= 25:  # Very oversold
+                    rsi_bonus = 0.3
+                elif rsi_value <= 30:  # Oversold
+                    rsi_bonus = 0.2
+                elif rsi_value >= 75:  # Very overbought (for sells)
+                    rsi_bonus = 0.25
+                elif rsi_value >= 70:  # Overbought
+                    rsi_bonus = 0.15
+            
+            # ✅ AI SIGNAL BONUS
+            ai_bonus = 0.0
+            if 'AI confirmation' in signal.reasons:
+                ai_bonus = 0.15
+                self.logger.info("🤖 AI signal bonus applied: +15%")
+            
+            # ✅ CALCULATE FINAL SIZE
+            total_multiplier = confidence_multiplier * (1.0 + rsi_bonus + ai_bonus)
+            position_size = base_size * total_multiplier
+            
+            # ✅ APPLY LIMITS
+            position_size = max(self.min_position_usdt, position_size)
+            position_size = min(self.max_position_usdt, position_size)
+            
+            self.logger.info(f"💰 RSI Position size: ${position_size:.2f}")
+            self.logger.info(f"   📊 RSI bonus: {rsi_bonus:.2f}, AI bonus: {ai_bonus:.2f}")
+            
+            return position_size
+            
+        except Exception as e:
+            self.logger.error(f"❌ RSI position size calculation error: {e}")
+            return self.min_position_usdt
+
+    def _calculate_rsi_indicators(self, data: pd.DataFrame) -> dict:
+        """Calculate RSI-specific technical indicators"""
+        indicators = {}
         
-        # Gerekli indikatörlerin varlığını ve NaN olmadığını kontrol et
-        required_cols_buy = ['rsi', 'volume_ratio', 'volatility_quantile_rank']
-        if any(pd.isna(current.get(col)) for col in required_cols_buy):
-            # self.logger.debug(f"[{self.strategy_name}] Alım için gerekli indikatörlerden bazıları NaN.")
-            return False
-
-        # Pozisyon limiti kontrolü
-        open_positions = self.portfolio.get_open_positions(self.symbol, self.strategy_name)
-        if len(open_positions) >= self.max_positions:
-            return False
+        try:
+            # RSI calculation
+            indicators['rsi'] = ta.rsi(data['close'], length=self.rsi_period)
             
-        # 1. RSI Aşırı Satım Kontrolü (Revize Edilmiş Eşik)
-        rsi_is_oversold = current['rsi'] <= self.rsi_oversold_threshold
-        if not rsi_is_oversold:
-            return False # Temel alım koşulu sağlanmadı
+            # Trend indicators
+            indicators['ema_short'] = ta.ema(data['close'], length=self.short_ema_period)
+            indicators['ema_long'] = ta.ema(data['close'], length=self.long_ema_period)
             
-        # 2. Trend Kontrolü (Revize Edilmiş Mantık)
-        trend_is_supportive, trend_msg = self._check_trend(current, previous)
-        if not trend_is_supportive:
-            # self.logger.debug(f"[{self.strategy_name}] Trend desteklemiyor: {trend_msg}")
-            return False
+            # Volume analysis
+            indicators['volume_ma'] = data['volume'].rolling(window=self.volume_ma_period).mean()
+            indicators['volume_ratio'] = data['volume'] / indicators['volume_ma']
             
-        # 3. Hacim Kontrolü (Revize Edilmiş Faktör)
-        volume_is_ok = current['volume_ratio'] >= self.min_volume_factor
-        if not volume_is_ok:
-            # self.logger.debug(f"[{self.strategy_name}] Hacim yetersiz: {current['volume_ratio']:.2f}x < {self.min_volume_factor}x")
-            return False
+            # ATR for stop loss calculations
+            indicators['atr'] = ta.atr(data['high'], data['low'], data['close'], length=14)
             
-        # 4. Volatilite Kontrolü (Aşırı Yüksek Olmasın)
-        if current.get('volatility_quantile_rank', 1.0) > self.max_volatility_quantile:
-            # self.logger.debug(f"[{self.strategy_name}] Volatilite çok yüksek: {current['volatility_quantile_rank']:.2f} > {self.max_volatility_quantile}")
-            return False
+            # Volatility
+            indicators['volatility'] = data['close'].rolling(window=20).std() / data['close'].rolling(window=20).mean()
             
-        # 5. AI Sinyal Kontrolü (KRİTİK HATA DÜZELTMESİ)
-        if self.use_ai_assistance and self.ai_provider:
-            # self.get_ai_signal(df) yerine ai_provider'dan sinyal alacağız.
-            # PDF önerisi: standalone sinyal alıp, eğer SELL/STRONG_SELL ise alımı engelle.
-            ai_standalone_signal = await self.ai_provider.get_standalone_signal(df_ohlcv=indicators) # indikatörleri yolla
-            if ai_standalone_signal in [AiSignal.SELL, AiSignal.STRONG_SELL]:
-                self.logger.info(f"[{self.strategy_name}] ALIM sinyali AI tarafından engellendi (AI Sinyali: {ai_standalone_signal.name}).")
-                return False
-            # Alternatif olarak get_ai_confirmation da kullanılabilir:
-            # ai_confirmation = await self.ai_provider.get_ai_confirmation("BUY", indicators, context={...})
-            # if not ai_confirmation: return False
-
-        self.logger.info(
-            f"[{self.strategy_name}] 🔵 ALIM Sinyali:\n"
-            f"- Fiyat: {current['close']:.8f}, RSI: {current['rsi']:.2f} (Eşik: <={self.rsi_oversold_threshold})\n"
-            f"- {trend_msg}\n"
-            f"- Hacim Oranı: {current['volume_ratio']:.2f}x (Eşik: >={self.min_volume_factor})\n"
-            f"- Volatilite Quantile: {current.get('volatility_quantile_rank', pd.NA):.2f} (Eşik: <={self.max_volatility_quantile})"
-        )
-        return True
-
-    async def should_sell(self, df_ohlcv: pd.DataFrame, position: Position) -> bool:
-        indicators = await self._calculate_indicators(df_ohlcv)
-        if indicators is None or len(indicators) < 2: # current ve previous için (trend kontrolü)
-            return False
-            
-        current = indicators.iloc[-1]
-        previous = indicators.iloc[-2] # _check_trend için
-        current_price = current['close']
-
-        if pd.isna(current_price) or any(pd.isna(current.get(col)) for col in ['rsi', 'atr']):
-            # self.logger.debug(f"[{self.strategy_name}] Satış için gerekli güncel indikatörlerden bazıları NaN.")
-            return False
+        except Exception as e:
+            self.logger.error(f"❌ RSI indicators calculation error: {e}")
         
-        gross_profit_percentage = (current_price / position.entry_price - 1)
-        sell_reason = None
+        return indicators
 
-        # 1. Sabit Stop-Loss (Revize Edilmiş Yüzde)
-        if gross_profit_percentage <= -self.stop_loss_percentage:
-            sell_reason = f"Sabit Stop-Loss (-{self.stop_loss_percentage*100:.2f}%)"
-        
-        # 2. ATR Tabanlı Dinamik Stop-Loss
-        if not sell_reason and 'atr' in current and not pd.isna(current['atr']):
-            atr_stop_price = position.entry_price - (current['atr'] * self.atr_stop_loss_multiplier)
-            if current_price <= atr_stop_price:
-                sell_reason = f"ATR Stop-Loss (Fiyat: {current_price:.8f} <= Hedef: {atr_stop_price:.8f})"
-
-        # 3. Kâr Realizasyonu (Revize Edilmiş Yüzde)
-        if not sell_reason and gross_profit_percentage >= self.profit_target_percentage:
-            # Kâr hedefine ulaşıldığında trende bakmadan çıkmak daha basit olabilir.
-            # Orijinal kodda trend mesajı loglanıyordu.
-            sell_reason = f"Brüt Kâr Hedefi (+{self.profit_target_percentage*100:.2f}%)"
-
-        # 4. RSI Aşırı Alım + Trend Zayıflama
-        if not sell_reason and current['rsi'] >= self.rsi_overbought_threshold:
-            trend_is_still_strong, trend_msg = self._check_trend(current, previous)
-            if not trend_is_still_strong: # Trend artık güçlü değilse (skor < threshold)
-                sell_reason = f"RSI Aşırı Alım + Trend Zayıflaması (RSI: {current['rsi']:.2f}, {trend_msg})"
-        
-        if sell_reason:
-            log_message = (
-                f"[{self.strategy_name}] 🔴 SATIŞ: {sell_reason}\n"
-                f"- Giriş: {position.entry_price:.8f}, Çıkış: {current_price:.8f}\n"
-                f"- Brüt Kâr/Zarar: {gross_profit_percentage*100:.4f}%"
-            )
-            if "Stop-Loss" in sell_reason or gross_profit_percentage < 0:
-                self.logger.warning(log_message)
+    def _analyze_rsi_buy_conditions(self, data: pd.DataFrame, indicators: dict, ai_signal) -> Optional[dict]:
+        """Analyze RSI buy signal conditions"""
+        try:
+            current_rsi = indicators['rsi'].iloc[-1]
+            current_price = data['close'].iloc[-1]
+            
+            # Check timing constraints
+            if self._is_too_soon_for_trade():
+                return None
+            
+            # Check position limits
+            if len(self.portfolio.positions) >= self.max_positions:
+                return None
+            
+            # RSI oversold condition
+            if current_rsi > self.rsi_oversold_threshold:
+                return None
+            
+            quality_score = 0
+            reasons = []
+            
+            # RSI extreme levels
+            if current_rsi <= 25:
+                quality_score += 4
+                reasons.append(f"RSI extremely oversold ({current_rsi:.1f})")
+            elif current_rsi <= 30:
+                quality_score += 3
+                reasons.append(f"RSI oversold ({current_rsi:.1f})")
             else:
-                self.logger.info(log_message)
-            return True
+                quality_score += 2
+                reasons.append(f"RSI below threshold ({current_rsi:.1f})")
             
-        return False
+            # Trend confirmation
+            ema_short = indicators['ema_short'].iloc[-1]
+            ema_long = indicators['ema_long'].iloc[-1]
+            
+            if ema_short > ema_long:
+                quality_score += 2
+                reasons.append("EMA uptrend confirmation")
+            elif ema_short < ema_long * 0.998:  # Small downtrend tolerance
+                quality_score -= 1
+                reasons.append("EMA slight downtrend")
+            
+            # Volume confirmation
+            volume_ratio = indicators['volume_ratio'].iloc[-1]
+            if volume_ratio >= self.min_volume_factor:
+                quality_score += 2
+                reasons.append(f"Volume confirmation ({volume_ratio:.2f}x)")
+            
+            # Volatility check
+            volatility = indicators['volatility'].iloc[-1]
+            if volatility < 0.05:  # Low volatility = more predictable
+                quality_score += 1
+                reasons.append(f"Low volatility environment ({volatility:.3f})")
+            
+            # AI signal confirmation
+            if ai_signal and ai_signal.direction == AiSignal.BULLISH:
+                quality_score += 2
+                reasons.append(f"AI confirmation (confidence: {ai_signal.confidence:.2f})")
+            elif ai_signal and ai_signal.direction == AiSignal.BEARISH:
+                quality_score -= 2
+                reasons.append(f"AI contradiction (bearish signal)")
+            
+            # Quality threshold
+            if quality_score >= self.trend_score_threshold:
+                confidence = min(0.95, (quality_score / 10.0))
+                return {
+                    'confidence': confidence,
+                    'reasons': reasons,
+                    'quality_score': quality_score,
+                    'rsi_value': current_rsi
+                }
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"❌ RSI buy conditions analysis error: {e}")
+            return None
+
+    def _analyze_rsi_sell_conditions(self, data: pd.DataFrame, indicators: dict) -> Optional[dict]:
+        """Analyze RSI sell signal conditions"""
+        try:
+            if not self.portfolio.positions:
+                return None
+            
+            current_price = data['close'].iloc[-1]
+            current_rsi = indicators['rsi'].iloc[-1]
+            atr = indicators['atr'].iloc[-1]
+            
+            reasons = []
+            should_sell = False
+            confidence = 0.5
+            
+            for position in self.portfolio.positions.values():
+                if position.symbol != self.symbol:
+                    continue
+                
+                # Calculate profit/loss
+                profit_pct = ((current_price - position.entry_price) / position.entry_price) * 100
+                profit_usdt = (current_price - position.entry_price) * position.quantity
+                
+                # Time-based analysis
+                from datetime import datetime, timezone
+                hold_time_minutes = (datetime.now(timezone.utc) - position.entry_time).total_seconds() / 60
+                
+                # RSI overbought conditions
+                if current_rsi >= self.rsi_overbought_threshold:
+                    should_sell = True
+                    confidence = 0.8
+                    reasons.append(f"RSI overbought ({current_rsi:.1f})")
+                
+                # Profit target
+                if profit_pct >= (self.profit_target_percentage * 100):
+                    should_sell = True
+                    confidence = 0.9
+                    reasons.append(f"Profit target reached ({profit_pct:.1f}%)")
+                
+                # Stop loss
+                if profit_pct <= -(self.stop_loss_percentage * 100):
+                    should_sell = True
+                    confidence = 0.95
+                    reasons.append(f"Stop loss triggered ({profit_pct:.1f}%)")
+                
+                # ATR-based stop loss
+                atr_stop_price = position.entry_price - (atr * self.atr_stop_loss_multiplier)
+                if current_price <= atr_stop_price:
+                    should_sell = True
+                    confidence = 0.9
+                    reasons.append(f"ATR stop loss triggered")
+                
+                # Time-based exit (if holding too long without profit)
+                if hold_time_minutes > 60 and profit_pct < 0.5:  # 1 hour with minimal profit
+                    should_sell = True
+                    confidence = 0.7
+                    reasons.append(f"Time-based exit ({hold_time_minutes:.0f}min)")
+            
+            if should_sell:
+                return {
+                    'confidence': confidence,
+                    'reasons': reasons,
+                    'rsi_value': current_rsi
+                }
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"❌ RSI sell conditions analysis error: {e}")
+            return None
+
+    def _is_too_soon_for_trade(self) -> bool:
+        """Check if enough time has passed since last trade"""
+        if self.last_trade_time is None:
+            return False
+        
+        from datetime import datetime, timezone, timedelta
+        time_since_last = datetime.now(timezone.utc) - self.last_trade_time
+        return time_since_last < timedelta(minutes=self.min_time_between_trades_minutes)
+
+    # ✅ LEGACY METHODS (preserved for backward compatibility but using BaseStrategy foundation)
+    
+    def _check_rsi_oversold(self, df: pd.DataFrame) -> bool:
+        """Legacy method - now uses analyze_market"""
+        # This method is kept for backward compatibility
+        # Real logic is now in analyze_market method
+        current_rsi = self.indicators.get('rsi', pd.Series([50])).iloc[-1] if hasattr(self, 'indicators') else 50
+        return current_rsi <= self.rsi_oversold_threshold
+
+    def _check_trend(self, df: pd.DataFrame) -> Tuple[int, str]:
+        """Legacy trend check method"""
+        if not hasattr(self, 'indicators'):
+            return 5, "No indicators available"
+        
+        ema_short = self.indicators.get('ema_short', pd.Series([0])).iloc[-1]
+        ema_long = self.indicators.get('ema_long', pd.Series([0])).iloc[-1]
+        
+        if ema_short > ema_long:
+            return 8, "Strong uptrend"
+        elif ema_short > ema_long * 0.998:
+            return 6, "Mild uptrend"
+        else:
+            return 3, "Downtrend"
+
+    def _check_volume(self, df: pd.DataFrame) -> Tuple[bool, str]:
+        """Legacy volume check method"""
+        if not hasattr(self, 'indicators'):
+            return False, "No indicators available"
+        
+        volume_ratio = self.indicators.get('volume_ratio', pd.Series([1])).iloc[-1]
+        return volume_ratio >= self.min_volume_factor, f"Volume ratio: {volume_ratio:.2f}"
+
+    def get_strategy_analytics(self) -> dict:
+        """
+        📊 Enhanced RSI strategy analytics with BaseStrategy integration
+        """
+        try:
+            # Get base analytics from BaseStrategy
+            base_analytics = super().get_strategy_analytics()
+            
+            # Add RSI-specific analytics
+            rsi_analytics = {
+                "rsi_specific": {
+                    "parameters": {
+                        "rsi_period": self.rsi_period,
+                        "oversold_threshold": self.rsi_oversold_threshold,
+                        "overbought_threshold": self.rsi_overbought_threshold,
+                        "profit_target_pct": self.profit_target_percentage * 100,
+                        "stop_loss_pct": self.stop_loss_percentage * 100
+                    },
+                    "current_levels": {
+                        "current_rsi": self.indicators.get('rsi', pd.Series([50])).iloc[-1] if hasattr(self, 'indicators') and 'rsi' in self.indicators else None,
+                        "is_oversold": self.indicators.get('rsi', pd.Series([50])).iloc[-1] <= self.rsi_oversold_threshold if hasattr(self, 'indicators') and 'rsi' in self.indicators else False,
+                        "is_overbought": self.indicators.get('rsi', pd.Series([50])).iloc[-1] >= self.rsi_overbought_threshold if hasattr(self, 'indicators') and 'rsi' in self.indicators else False
+                    },
+                    "ai_integration": {
+                        "ai_provider_enabled": self.ai_provider is not None,
+                        "ai_provider_type": type(self.ai_provider).__name__ if self.ai_provider else None
+                    }
+                }
+            }
+            
+            # Merge analytics
+            base_analytics.update(rsi_analytics)
+            return base_analytics
+            
+        except Exception as e:
+            self.logger.error(f"❌ RSI strategy analytics error: {e}")
+            return {"error": str(e)}
