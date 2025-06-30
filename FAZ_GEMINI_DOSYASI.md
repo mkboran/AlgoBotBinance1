@@ -1,33 +1,50 @@
 # PROJE: PHOENIX - KUSURSUZ ALGORİTMİK TİCARET SİSTEMİ MASTER PLANI
 
-**Versiyon:** 2.1
-**Tarih:** 30 Haziran 2025
+**Versiyon:** 9.0
+**Tarih:** 1 Temmuz 2025
 **Mimar:** Gemini
 
 ---
 
-## **BÖLÜM I: VİZYON VE FELSEFE**
+## **BÖLÜM I: GEMINI (BEN) İÇİN BAŞLANGIÇ NOTLARI**
 
-(İçerik Değişmedi)
+**GÖREV:** Bu dosyayı her sohbet başlangıcında ilk olarak oku. Projenin vizyonunu, felsefesini, mevcut durumunu ve sıradaki görevi anlamak için bu dosyayı temel al. Her adıma başlamadan önce, bu dosyadaki yol haritasını ve proje günlüğünü gözden geçir.
 
----
+**PROJE FELSEFESİ: "TEK SEFERDE MÜKEMMELLİK"**
+- **Ana Prensip:** Bir dosyayı veya bileşeni defalarca değiştirmek yerine, o bileşenin ulaşması hedeflenen nihai ve "Arşı Kalite" durumunu en başından tanımlayan, tek ve kapsamlı bir görevle ilerleyeceğiz.
+- **Kalite Standardı:** Her kod satırı, her dosya, her mimari karar **hedge-fund seviyesinde** olmalıdır. Mükemmellikten daha azı kabul edilemez.
+- **Claude Yönetimi:** Claude'a görevleri **küçük, net ve odaklı** parçalar halinde ver. Ancak bir dosyayı ilgilendiren tüm değişiklikleri **tek bir görevde, kapsamlı bir şekilde** iste. Claude bir dosyayı güncellediğinde, hangi dosyayı güncellediğini belirtmesini iste.
 
-## **BÖLÜM II: GELİŞTİRME FAZLARI**
+--- 
 
-### **FAZ 1: MİMARİ TEMELLERİN TAMAMLANMASI (Neredeyse Bitti)**
+## **BÖLÜM II: PROJE DURUMU VE YOL HARİTASI**
 
-**Amaç:** Üzerine bir imparatorluk kurulabilecek, sarsılmaz temelleri atmak.
+### **MEVCUT DURUM (1 Temmuz 2025):**
 
-*   **Adım 1.1: Merkezi Sistem Çekirdeği (`main.py`)** - `[TAMAMLANDI]`
-*   **Adım 1.2: Stratejilerin Ortak Beyni (`BaseStrategy`)** - `[TAMAMLANDI]`
-*   **Adım 1.3: Bağımlılıkların Kesinleştirilmesi (`requirements.txt`)** - `[SIRADAKİ GÖREV]`
+- **Tamamlanan Fazlar:**
+  - **FAZ 1: MİMARİ TEMELLER** `[TAMAMLANDI]`
+  - **FAZ 2: MERKEZİ ZEKANIN ENTEGRASYONU** `[TAMAMLANDI]`
+  - **FAZ 3: STRATEJİLERİN KOLEKTİF BİLİNCE ULAŞMASI** `[TAMAMLANDI]`
 
-### **FAZ 2: GELİŞMİŞ SİSTEMLERİN SENFONİK ENTEGRASYONU (Sırada)**
+- **Mevcut Görev:**
+  - **FAZ 4: KENDİNİ İYİLEŞTİREN VE EVRİMLEŞEN SİSTEM** `[CLAUDE ÜZERİNDE]`
+    - **Aksiyon:** Claude, `utils/adaptive_parameter_evolution.py` dosyasını, stratejilerin performansını izleyip, zayıflayanları otomatik olarak yeniden optimize edecek şekilde oluşturuyor.
 
-**Amaç:** `utils/` klasöründeki "gömülü hazineleri" (dinamik çıkış, Kelly, küresel zeka) `BaseStrategy` üzerinden tüm stratejilerin temel bir parçası haline getirmek.
+### **SIRADAKİ GÖREV PLANI:**
 
-*   **Adım 2.1: Dinamik Çıkış Sistemi Entegrasyonu**
-*   **Adım 2.2: Kelly Criterion ile Pozisyon Boyutlandırma Entegrasyonu**
-*   **Adım 2.3: Küresel Piyasa Zekası Filtresi**
+1.  **FAZ 5: SİSTEMİN CANLANMASI - `main.py` ENTEGRASYONU**
+    - **Hedef:** Projenin tüm bileşenlerini bir araya getirerek, `main.py` üzerinden tam fonksiyonel, komut satırından yönetilebilir bir sistem oluşturmak.
+    - **Aksiyon:** Claude Faz 4'ü bitirdikten sonra, `main.py` dosyasını "Arşı Kalite" tanımına göre yeniden yapılandırması için görevlendirilecek.
 
-(Diğer Fazlar Değişmedi)
+2.  **FAZ 6: LANSMAN ÖNCESİ SON KONTROLLER VE DOĞRULAMA**
+    - **Hedef:** Sistemin canlıya geçmeden önce matematiksel ve pratik olarak kârlılığını ve sağlamlığını kanıtlamak.
+    - **Aksiyon Sırası (Kesinlikle Bu Sırayla):
+**
+      1.  **Nihai Optimizasyon:** `main.py optimize` ile en ideal parametreleri bul.
+      2.  **Kapsamlı Backtest:** Optimize edilmiş parametrelerle `main.py backtest` ile geçmiş performansı doğrula.
+      3.  **Kağıt Ticareti (Paper Trading):** `main.py live` komutunu paper trading modunda çalıştırarak gerçek zamanlı piyasa koşullarında test et.
+      4.  **Düşük Bütçeli Canlı Test:** Her şey yolundaysa, minimum riskle gerçek piyasaya geç.
+
+3.  **FAZ 7: GELECEK GELİŞTİRMELERİ (Uzun Vadeli Vizyon)**
+    - **Hedef:** Çekirdek sistem kanıtlandıktan sonra yeni yetenekler eklemek.
+    - **Aksiyonlar:** Yeni pariteler eklemek, kontrollü kaldıraç denemeleri yapmak.

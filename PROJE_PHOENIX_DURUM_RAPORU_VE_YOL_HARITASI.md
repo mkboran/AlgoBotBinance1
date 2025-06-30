@@ -1,6 +1,6 @@
 # PROJE PHOENIX: DURUM RAPORU VE SÜPER GÜÇ YOL HARİTASI
 
-**Versiyon:** 7.0
+**Versiyon:** 9.0
 **Tarih:** 1 Temmuz 2025
 **Mimar:** Gemini
 
@@ -20,35 +20,24 @@ Proje geliştirme sürecinde, özellikle LLM'lerle çalışırken, verimliliği 
 
 **FAZ 3: STRATEJİLERİN KOLEKTİF BİLİNCE ULAŞMASI** `[TAMAMLANDI]`
 
-**FAZ 4: KENDİNİ İYİLEŞTİREN VE EVRİMLEŞEN SİSTEM** `[MEVCUT GÖREV]`
-- **Hedef:** Sistemin manuel müdahaleye olan ihtiyacını minimize etmek ve kendi performansını sürekli olarak iyileştiren, yaşayan bir organizma yaratmak.
-- **Aksiyon:** `utils/adaptive_parameter_evolution.py` dosyasını, "Arşı Kalite" tanımına göre oluşturmak.
+**FAZ 4: KENDİNİ İYİLEŞTİREN VE EVRİMLEŞEN SİSTEM** `[TAMAMLANDI]`
 
-**FAZ 5: SİSTEMİN CANLANMASI - `main.py` ENTEGRASYONU (Sıradaki ve Final Görev)**
-- **Hedef:** Şimdiye kadar oluşturulan tüm gelişmiş sistemleri (Stratejiler, Coordinator, Optimizer, Backtester, Parameter Evolution) bir araya getirip, projenin ana giriş noktası olan `main.py` üzerinden tam fonksiyonel, komut satırından yönetilebilir, canlı bir sisteme dönüştürmek.
-- **Aksiyon:** `main.py` dosyasını, aşağıdaki "Arşı Kalite" tanımına göre yeniden yapılandırmak.
+**FAZ 5: SİSTEMİN CANLANMASI - `main.py` ENTEGRASYONU [MEVCUT GÖREV]
+- **Hedef:** Projenin tüm bileşenlerini bir araya getirerek, `main.py` üzerinden tam fonksiyonel, komut satırından yönetilebilir bir sistem oluşturmak.
+- **Aksiyon:** `main.py` dosyasını, "Arşı Kalite" tanımına göre yeniden yapılandırmak.
 
-#### **"Arşı Kalite" `main.py` v2.0 Tanımı:**
+**FAZ 6: LANSMAN ÖNCESİ SON KONTROLLER VE DOĞRULAMA (Final Test Aşaması)**
+- **Hedef:** Sistemin canlıya geçmeden önce matematiksel ve pratik olarak kârlılığını ve sağlamlığını kanıtlamak.
+- **Aksiyonlar (Doğru Sırayla):
+**
+  1.  **Nihai Optimizasyon:** `main.py optimize` komutunu kullanarak, tüm stratejiler için en ideal parametre setlerini `MasterOptimizer` ile bulmak.
+  2.  **Kapsamlı Backtest:** Optimizasyondan elde edilen en iyi parametrelerle, `main.py backtest` komutunu kullanarak geniş bir tarih aralığında (örn: son 1-2 yıl) sistemin genel performansını test etmek. Bu testin sonuçları (Sharpe, Drawdown, PnL) hedeflerimizle uyuşmalı.
+  3.  **Kağıt Ticareti (Paper Trading):** Backtest başarılı olursa, `main.py live` komutunu **paper trading modunda** çalıştırarak sistemi en az 1-2 hafta boyunca canlı piyasa verileriyle, ancak sahte parayla test etmek. Bu, backtest'te öngörülemeyen gecikme (latency) ve kayma (slippage) gibi gerçek dünya faktörlerine karşı sistemin dayanıklılığını ölçer.
+  4.  **Düşük Bütçeli Canlıya Geçiş:** Paper trading sonuçları da başarılıysa, sistemi çok küçük bir sermaye ile (örn: 50-100 USD) gerçek zamanlı ticarete açmak ve yakından izlemek.
 
-`main.py` dosyası, projenin merkezi komuta merkezi olacak ve aşağıdaki yeteneklere sahip olacak şekilde güncellenmelidir:
-
-1.  **Sınıf Yapısı (`PhoenixTradingSystem`):**
-    - Ana mantığı barındıran bir sınıf oluşturulacak.
-    - `__init__` metodu, sistemin tüm temel bileşenlerini (`Portfolio`, `StrategyCoordinator`, `MasterOptimizer`, `MultiStrategyBacktester`, `SystemValidator`, `AdaptiveParameterEvolution`) başlatacak veya `None` olarak tanımlayacak.
-    - Desteklenen tüm stratejileri bir "registry" (sözlük) içinde tutacak.
-
-2.  **Komut Satırı Arayüzü (`argparse`):**
-    - `live`: Canlı ticaret modunu başlatır. `--strategy`, `--capital`, `--symbol` gibi argümanlar almalıdır.
-    - `backtest`: Gelişmiş backtest modunu başlatır. `--strategy`, `--start-date`, `--end-date`, `--capital`, `--data-file` gibi argümanlar almalıdır.
-    - `optimize`: Optimizasyon modunu başlatır. `--strategy`, `--trials`, `--storage`, `--walk-forward` gibi argümanlar almalıdır.
-    - `validate`: `SystemValidator`'ı çağırarak sistemin genel sağlık durumunu kontrol eder.
-    - `status`: Sistemin anlık durumu (aktif stratejiler, portföy değeri, PnL vb.) hakkında bir rapor sunar.
-
-3.  **Fonksiyonların Doldurulması:**
-    - `run_live_trading`: `StrategyCoordinator`'ı periyodik olarak çalıştıran bir `async` döngü içermelidir. Her döngüde, piyasa verisini almalı, koordinatöre göndermeli ve belirli aralıklarla `AdaptiveParameterEvolution` sistemini tetiklemelidir.
-    - `run_backtest`: `MultiStrategyBacktester`'ı, komut satırından gelen argümanlara uygun bir `BacktestConfiguration` ile çağıracak ve sonuçları konsola formatlayarak yazdıracaktır.
-    - `run_optimization`: `MasterOptimizer`'ı, komut satırından gelen argümanlara uygun bir `OptimizationConfig` ile çağıracak ve optimizasyon sonuçlarını özetleyecektir.
-
-4.  **Hata Yönetimi ve Güvenlik:**
-    - Tüm ana operasyonlar, geniş kapsamlı `try...except` blokları içinde çalışmalı, hatalar düzgün bir şekilde loglanmalı ve sistemin çökmesi engellenmelidir.
-    - `run_live_trading` içinde, portföyde belirli bir orandan fazla düşüş (%15 gibi) yaşanması durumunda sistemi otomatik olarak durduracak bir **acil durum freni (emergency brake)** mekanizması bulunmalıdır.
+**FAZ 7: GELECEK GELİŞTİRMELERİ (Uzun Vadeli Vizyon)**
+- **Hedef:** Sağlam ve kârlı çekirdek sistemi daha da genişletmek.
+- **Aksiyonlar:**
+    1.  **Yeni Pariteler:** Sisteme ETH/USDT, SOL/USDT gibi yeni ve yüksek potansiyelli işlem çiftleri eklemek.
+    2.  **Kaldıraçlı İşlemler:** Risk yönetimi ve pozisyon boyutlandırma sistemlerini, kaldıraçlı işlemlerin (futures) getirdiği ek riskleri (likidasyon, fonlama oranları) yönetecek şekilde güncellemek.
+    3.  **Yeni Strateji Türleri:** Arbitraj, istatistiksel arbitraj veya piyasa yapıcı (market making) gibi tamamen farklı mantıklara dayanan yeni stratejiler geliştirmek.
