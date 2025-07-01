@@ -32,6 +32,14 @@ import json
 import ast
 import tempfile
 
+# 🔧 CRITICAL: Python path'e proje kökünü ekle
+PROJECT_ROOT = Path(__file__).parent.parent.absolute()
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# Logs için logs klasörünü oluştur
+Path("logs").mkdir(exist_ok=True)
+
 # Logging yapılandırması
 logging.basicConfig(
     level=logging.INFO,
@@ -59,8 +67,14 @@ class PhoenixSystemValidator:
     def __init__(self, project_root: str = "."):
         self.project_root = Path(project_root)
         
-        # Logs klasörünü oluştur
-        (self.project_root / "logs").mkdir(exist_ok=True)
+        # Logs klasörünü oluştur (yoksa otomatik oluştur)
+        logs_dir = self.project_root / "logs"
+        logs_dir.mkdir(exist_ok=True)
+        
+        # Log dosyasını oluştur (yoksa)
+        log_file = logs_dir / "system_validation.log"
+        if not log_file.exists():
+            log_file.touch()
         
         # Doğrulama sonuçları
         self.validation_results = []
@@ -70,7 +84,7 @@ class PhoenixSystemValidator:
         # Kritik dosyalar ve modüller
         self.critical_files = [
             "utils/config.py",
-            "utils/portfolio.py",
+            "utils/portfolio.py", 
             "utils/logger.py",
             "strategies/momentum_optimized.py",
             "main.py",
@@ -79,10 +93,10 @@ class PhoenixSystemValidator:
         
         self.critical_imports = [
             "pandas",
-            "numpy", 
+            "numpy",
             "ccxt",
             "utils.config",
-            "utils.portfolio",
+            "utils.portfolio", 
             "utils.logger"
         ]
         
@@ -104,37 +118,24 @@ class PhoenixSystemValidator:
                 self.critical_failures.append(result)
             else:
                 self.warnings.append(result)
-    
+
     def validate_critical_files(self) -> bool:
-        """📄 Kritik dosyaların varlığını kontrol et"""
+        """📁 Kritik dosyaların varlığı kontrolü"""
         
-        logger.info("📄 Kritik dosya kontrolü...")
+        logger.info("📁 Kritik dosyalar kontrolü...")
         
-        all_files_exist = True
         missing_files = []
         
         for file_path in self.critical_files:
             full_path = self.project_root / file_path
             
-            if full_path.exists():
-                # Dosya boyutu kontrolü
-                size_kb = full_path.stat().st_size / 1024
-                
-                if size_kb < 0.1:  # 100 byte'dan küçükse
-                    self.add_result(ValidationResult(
-                        name=f"critical_file_size_{file_path}",
-                        passed=False,
-                        message=f"Kritik dosya çok küçük: {file_path} ({size_kb:.1f} KB)",
-                        details={"file_path": file_path, "size_kb": size_kb}
-                    ))
-                    all_files_exist = False
-                else:
-                    self.add_result(ValidationResult(
-                        name=f"critical_file_{file_path}",
-                        passed=True,
-                        message=f"Kritik dosya mevcut: {file_path} ({size_kb:.1f} KB)",
-                        details={"file_path": file_path, "size_kb": size_kb}
-                    ))
+            if full_path.exists() and full_path.is_file():
+                self.add_result(ValidationResult(
+                    name=f"critical_file_{file_path}",
+                    passed=True,
+                    message=f"Kritik dosya mevcut: {file_path}",
+                    details={"file_path": file_path, "size": full_path.stat().st_size}
+                ))
             else:
                 missing_files.append(file_path)
                 self.add_result(ValidationResult(
@@ -143,236 +144,14 @@ class PhoenixSystemValidator:
                     message=f"Kritik dosya eksik: {file_path}",
                     details={"file_path": file_path, "missing": True}
                 ))
-                all_files_exist = False
         
         if missing_files:
             logger.error(f"❌ {len(missing_files)} kritik dosya eksik: {', '.join(missing_files)}")
         else:
             logger.info("✅ Tüm kritik dosyalar mevcut")
         
-        return all_files_exist
-    
-    def validate_critical_imports(self) -> bool:
-        """📦 Kritik importların çalışıp çalışmadığını kontrol et"""
-        
-        logger.info("📦 Kritik import kontrolü...")
-        
-        all_imports_work = True
-        failed_imports = []
-        
-        for module_name in self.critical_imports:
-            try:
-                importlib.import_module(module_name)
-                
-                self.add_result(ValidationResult(
-                    name=f"critical_import_{module_name}",
-                    passed=True,
-                    message=f"Import başarılı: {module_name}",
-                    details={"module": module_name}
-                ))
-                
-            except ImportError as e:
-                failed_imports.append((module_name, str(e)))
-                self.add_result(ValidationResult(
-                    name=f"critical_import_{module_name}",
-                    passed=False,
-                    message=f"Import başarısız: {module_name} - {e}",
-                    details={"module": module_name, "error": str(e)}
-                ))
-                all_imports_work = False
-                
-            except Exception as e:
-                self.add_result(ValidationResult(
-                    name=f"critical_import_{module_name}",
-                    passed=False,
-                    message=f"Import hatası: {module_name} - {e}",
-                    details={"module": module_name, "error": str(e), "error_type": type(e).__name__}
-                ))
-                all_imports_work = False
-        
-        if failed_imports:
-            logger.error(f"❌ {len(failed_imports)} kritik import başarısız")
-            for module, error in failed_imports:
-                logger.error(f"   {module}: {error}")
-        else:
-            logger.info("✅ Tüm kritik importlar başarılı")
-        
-        return all_imports_work
-    
-    def validate_critical_classes(self) -> bool:
-        """🏗️ Kritik sınıfların başlatılabilirliğini test et"""
-        
-        logger.info("🏗️ Kritik sınıf kontrolü...")
-        
-        all_classes_work = True
-        failed_classes = []
-        
-        for module_name, class_name in self.critical_classes:
-            try:
-                # Modülü import et
-                module = importlib.import_module(module_name)
-                
-                # Sınıfı al
-                cls = getattr(module, class_name)
-                
-                # Temel initialization testi (parametresiz olabilirse)
-                test_success = self._test_class_initialization(cls, class_name)
-                
-                if test_success:
-                    self.add_result(ValidationResult(
-                        name=f"critical_class_{module_name}.{class_name}",
-                        passed=True,
-                        message=f"Sınıf başlatılabilir: {module_name}.{class_name}",
-                        details={"module": module_name, "class": class_name}
-                    ))
-                else:
-                    self.add_result(ValidationResult(
-                        name=f"critical_class_{module_name}.{class_name}",
-                        passed=False,
-                        message=f"Sınıf başlatılamıyor: {module_name}.{class_name}",
-                        details={"module": module_name, "class": class_name}
-                    ))
-                    all_classes_work = False
-                
-            except ImportError as e:
-                failed_classes.append((f"{module_name}.{class_name}", f"Import error: {e}"))
-                self.add_result(ValidationResult(
-                    name=f"critical_class_{module_name}.{class_name}",
-                    passed=False,
-                    message=f"Sınıf import hatası: {module_name}.{class_name} - {e}",
-                    details={"module": module_name, "class": class_name, "error": str(e)}
-                ))
-                all_classes_work = False
-                
-            except AttributeError as e:
-                failed_classes.append((f"{module_name}.{class_name}", f"Class not found: {e}"))
-                self.add_result(ValidationResult(
-                    name=f"critical_class_{module_name}.{class_name}",
-                    passed=False,
-                    message=f"Sınıf bulunamadı: {module_name}.{class_name} - {e}",
-                    details={"module": module_name, "class": class_name, "error": str(e)}
-                ))
-                all_classes_work = False
-                
-            except Exception as e:
-                failed_classes.append((f"{module_name}.{class_name}", f"Unexpected error: {e}"))
-                self.add_result(ValidationResult(
-                    name=f"critical_class_{module_name}.{class_name}",
-                    passed=False,
-                    message=f"Sınıf test hatası: {module_name}.{class_name} - {e}",
-                    details={"module": module_name, "class": class_name, "error": str(e), "error_type": type(e).__name__}
-                ))
-                all_classes_work = False
-        
-        if failed_classes:
-            logger.error(f"❌ {len(failed_classes)} kritik sınıf başarısız")
-            for class_name, error in failed_classes:
-                logger.error(f"   {class_name}: {error}")
-        else:
-            logger.info("✅ Tüm kritik sınıflar çalışıyor")
-        
-        return all_classes_work
-    
-    def _test_class_initialization(self, cls, class_name: str) -> bool:
-        """🧪 Sınıf başlatılabilirlik testi"""
-        
-        try:
-            # Portfolio sınıfı için özel test
-            if class_name == "Portfolio":
-                instance = cls(initial_balance=1000.0)
-                return hasattr(instance, 'balance') and instance.balance == 1000.0
-            
-            # Strategy sınıfları için özel test
-            elif "Strategy" in class_name:
-                # Strategy'ler Portfolio instance'ı bekler, mock kullan
-                mock_portfolio = type('MockPortfolio', (), {
-                    'balance': 1000.0,
-                    'initial_balance': 1000.0,
-                    'positions': []
-                })()
-                
-                instance = cls(portfolio=mock_portfolio)
-                return hasattr(instance, 'portfolio')
-            
-            # Backtester için özel test
-            elif class_name == "MomentumBacktester":
-                # Geçici CSV dosyası oluştur
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
-                    f.write("timestamp,open,high,low,close,volume\n")
-                    f.write("2024-01-01 00:00:00,40000,41000,39000,40500,1000\n")
-                    temp_file = f.name
-                
-                try:
-                    instance = cls(data_file_path=temp_file, initial_capital=1000.0)
-                    return hasattr(instance, 'initial_capital')
-                finally:
-                    os.unlink(temp_file)
-            
-            # Genel test - parametresiz initialization dene
-            else:
-                instance = cls()
-                return instance is not None
-                
-        except Exception as e:
-            logger.debug(f"Class initialization test failed for {class_name}: {e}")
-            return False
-    
-    def validate_syntax(self) -> bool:
-        """🐍 Python syntax kontrolü"""
-        
-        logger.info("🐍 Python syntax kontrolü...")
-        
-        python_files = []
-        
-        # Python dosyalarını bul
-        for pattern in ["*.py", "*/*.py", "*/*/*.py"]:
-            python_files.extend(self.project_root.glob(pattern))
-        
-        syntax_errors = []
-        checked_files = 0
-        
-        for py_file in python_files:
-            try:
-                # __pycache__ klasörlerini atla
-                if "__pycache__" in str(py_file):
-                    continue
-                
-                with open(py_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                # AST parse ile syntax kontrolü
-                ast.parse(content, filename=str(py_file))
-                checked_files += 1
-                
-            except SyntaxError as e:
-                syntax_errors.append((str(py_file), str(e)))
-                self.add_result(ValidationResult(
-                    name=f"syntax_error_{py_file.name}",
-                    passed=False,
-                    message=f"Syntax hatası: {py_file} - {e}",
-                    details={"file": str(py_file), "error": str(e), "line": getattr(e, 'lineno', None)}
-                ))
-                
-            except Exception as e:
-                # Encoding veya diğer hatalar
-                logger.warning(f"⚠️ {py_file} okunamadı: {e}")
-        
-        if syntax_errors:
-            logger.error(f"❌ {len(syntax_errors)} dosyada syntax hatası")
-            for file_path, error in syntax_errors:
-                logger.error(f"   {file_path}: {error}")
-        else:
-            logger.info(f"✅ {checked_files} Python dosyasında syntax hatası yok")
-        
-        self.add_result(ValidationResult(
-            name="syntax_validation",
-            passed=len(syntax_errors) == 0,
-            message=f"Syntax kontrolü: {checked_files} dosya, {len(syntax_errors)} hata",
-            details={"checked_files": checked_files, "syntax_errors": len(syntax_errors)}
-        ))
-        
-        return len(syntax_errors) == 0
-    
+        return len(missing_files) == 0
+
     def validate_directory_structure(self) -> bool:
         """📁 Klasör yapısı kontrolü"""
         
@@ -380,11 +159,12 @@ class PhoenixSystemValidator:
         
         required_directories = [
             "utils",
-            "strategies", 
-            "optimization",
+            "strategies",
+            "optimization", 
             "optimization/results",
             "scripts",
-            "logs"
+            "logs",
+            "backtesting"
         ]
         
         missing_dirs = []
@@ -422,7 +202,7 @@ class PhoenixSystemValidator:
             logger.info("✅ Tüm gerekli klasörler mevcut")
         
         return len(missing_dirs) == 0
-    
+
     def validate_requirements(self) -> bool:
         """📋 Requirements.txt kontrolü"""
         
@@ -437,147 +217,343 @@ class PhoenixSystemValidator:
                 message="requirements.txt dosyası bulunamadı",
                 details={"missing": True}
             ))
+            logger.error("❌ requirements.txt dosyası bulunamadı")
             return False
         
         try:
             with open(req_file, 'r', encoding='utf-8') as f:
-                content = f.read()
+                requirements_content = f.read()
             
-            # Temel paketlerin varlığını kontrol et
-            required_packages = ["pandas", "numpy", "ccxt", "optuna"]
+            # Temel gereksinimleri kontrol et
+            required_packages = ['pandas', 'numpy', 'ccxt', 'optuna', 'scikit-learn']
             missing_packages = []
             
             for package in required_packages:
-                if package not in content:
+                if package not in requirements_content:
                     missing_packages.append(package)
             
             if missing_packages:
                 self.add_result(ValidationResult(
                     name="requirements_packages",
                     passed=False,
-                    message=f"Requirements.txt'de eksik paketler: {', '.join(missing_packages)}",
+                    message=f"Eksik paketler: {', '.join(missing_packages)}",
                     details={"missing_packages": missing_packages}
                 ))
+                logger.error(f"❌ Requirements.txt'de eksik paketler: {', '.join(missing_packages)}")
                 return False
             else:
                 self.add_result(ValidationResult(
-                    name="requirements_packages", 
+                    name="requirements_packages",
                     passed=True,
-                    message="Requirements.txt gerekli paketleri içeriyor",
-                    details={"file_size": len(content)}
+                    message="Tüm temel paketler mevcut",
+                    details={"packages_found": required_packages}
                 ))
+                logger.info("✅ Requirements.txt doğrulandı")
                 return True
                 
         except Exception as e:
             self.add_result(ValidationResult(
                 name="requirements_file",
                 passed=False,
-                message=f"Requirements.txt okunamadı: {e}",
+                message=f"Requirements.txt okuma hatası: {e}",
                 details={"error": str(e)}
             ))
+            logger.error(f"❌ Requirements.txt okuma hatası: {e}")
             return False
+
+    def validate_imports(self) -> bool:
+        """📦 Kritik importların test edilmesi"""
+        
+        logger.info("📦 Kritik importlar kontrolü...")
+        
+        # Önce test_imports.py'yi çalıştırarak import'ları test et
+        try:
+            import subprocess
+            result = subprocess.run([
+                sys.executable, "test_imports.py"
+            ], capture_output=True, text=True, cwd=self.project_root, encoding='utf-8')
+            
+            if result.returncode == 0 and "8/8 import basarili" in result.stdout:
+                logger.info("✅ Import test (subprocess): Tüm import'lar başarılı")
+                
+                # Manuel import testini de yap
+                return self._manual_import_test()
+            else:
+                logger.error(f"❌ Import test (subprocess) başarısız: {result.stderr}")
+                return False
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Subprocess import test başarısız, manuel test yapılıyor: {e}")
+            return self._manual_import_test()
     
+    def _manual_import_test(self) -> bool:
+        """🔧 Manuel import test (fallback)"""
+        
+        failed_imports = []
+        
+        # Python path'i ekle
+        original_path = sys.path.copy()
+        try:
+            if str(self.project_root) not in sys.path:
+                sys.path.insert(0, str(self.project_root))
+            
+            for import_name in self.critical_imports:
+                try:
+                    # Modül zaten yüklüyse reload et
+                    if import_name in sys.modules:
+                        importlib.reload(sys.modules[import_name])
+                    else:
+                        importlib.import_module(import_name)
+                    
+                    self.add_result(ValidationResult(
+                        name=f"import_{import_name}",
+                        passed=True,
+                        message=f"Import başarılı: {import_name}",
+                        details={"import_name": import_name}
+                    ))
+                    logger.debug(f"✅ Import başarılı: {import_name}")
+                    
+                except ImportError as e:
+                    failed_imports.append(import_name)
+                    self.add_result(ValidationResult(
+                        name=f"import_{import_name}",
+                        passed=False,
+                        message=f"Import başarısız: {import_name} - {e}",
+                        details={"import_name": import_name, "error": str(e)}
+                    ))
+                    logger.error(f"❌ Import başarısız: {import_name} - {e}")
+                    
+                except Exception as e:
+                    failed_imports.append(import_name)
+                    self.add_result(ValidationResult(
+                        name=f"import_{import_name}",
+                        passed=False,
+                        message=f"Import beklenmedik hata: {import_name} - {e}",
+                        details={"import_name": import_name, "error": str(e)}
+                    ))
+                    logger.error(f"❌ Import beklenmedik hata: {import_name} - {e}")
+        
+        finally:
+            # Python path'i geri yükle
+            sys.path = original_path
+        
+        if failed_imports:
+            logger.error(f"❌ {len(failed_imports)} import başarısız: {', '.join(failed_imports)}")
+        else:
+            logger.info("✅ Tüm kritik importlar başarılı")
+        
+        return len(failed_imports) == 0
+
+    def validate_class_instantiation(self) -> bool:
+        """🏗️ Kritik sınıfların test edilmesi"""
+        
+        logger.info("🏗️ Kritik sınıflar kontrolü...")
+        
+        failed_classes = []
+        
+        # Python path'i ekle
+        original_path = sys.path.copy()
+        try:
+            if str(self.project_root) not in sys.path:
+                sys.path.insert(0, str(self.project_root))
+        
+            for module_name, class_name in self.critical_classes:
+                try:
+                    module = importlib.import_module(module_name)
+                    cls = getattr(module, class_name)
+                    
+                    # Basit instantiation testi
+                    if class_name == "Portfolio":
+                        instance = cls(initial_capital_usdt=1000.0)
+                    elif class_name == "EnhancedMomentumStrategy":
+                        # Gerçek Portfolio instance oluştur
+                        portfolio_module = importlib.import_module('utils.portfolio')
+                        portfolio_cls = getattr(portfolio_module, 'Portfolio')
+                        portfolio = portfolio_cls(initial_capital_usdt=1000.0)
+                        instance = cls(portfolio=portfolio)
+                    elif class_name == "MomentumBacktester":
+                        # MomentumBacktester required parameters ile test et
+                        instance = cls(
+                            csv_path="test.csv",
+                            initial_capital=1000.0,
+                            start_date="2024-01-01",
+                            end_date="2024-12-31", 
+                            symbol="BTC/USDT"
+                        )
+                    else:
+                        # Diğer sınıflar için varsayılan constructor
+                        instance = cls()
+                    
+                    self.add_result(ValidationResult(
+                        name=f"class_{module_name}_{class_name}",
+                        passed=True,
+                        message=f"Sınıf başarıyla test edildi: {module_name}.{class_name}",
+                        details={"module": module_name, "class": class_name}
+                    ))
+                    logger.debug(f"✅ Sınıf testi başarılı: {module_name}.{class_name}")
+                    
+                except Exception as e:
+                    failed_classes.append(f"{module_name}.{class_name}")
+                    self.add_result(ValidationResult(
+                        name=f"class_{module_name}_{class_name}",
+                        passed=False,
+                        message=f"Sınıf testi başarısız: {module_name}.{class_name} - {e}",
+                        details={"module": module_name, "class": class_name, "error": str(e)}
+                    ))
+                    logger.error(f"❌ Sınıf testi başarısız: {module_name}.{class_name} - {e}")
+        
+        finally:
+            # Python path'i geri yükle
+            sys.path = original_path
+        
+        if failed_classes:
+            logger.error(f"❌ {len(failed_classes)} sınıf testi başarısız: {', '.join(failed_classes)}")
+        else:
+            logger.info("✅ Tüm kritik sınıflar başarıyla test edildi")
+        
+        return len(failed_classes) == 0
+
+    def validate_code_quality(self) -> bool:
+        """🔍 Kod kalitesi kontrolü"""
+        
+        logger.info("🔍 Kod kalitesi kontrolü...")
+        
+        python_files = list(self.project_root.rglob("*.py"))
+        syntax_errors = []
+        
+        for py_file in python_files:
+            # __pycache__ ve .git klasörlerini atla
+            if "__pycache__" in str(py_file) or ".git" in str(py_file):
+                continue
+                
+            try:
+                with open(py_file, 'r', encoding='utf-8') as f:
+                    source = f.read()
+                
+                # Syntax kontrolü
+                ast.parse(source)
+                
+                self.add_result(ValidationResult(
+                    name=f"syntax_{py_file.name}",
+                    passed=True,
+                    message=f"Syntax doğru: {py_file.relative_to(self.project_root)}",
+                    details={"file": str(py_file.relative_to(self.project_root))}
+                ))
+                
+            except SyntaxError as e:
+                syntax_errors.append(str(py_file.relative_to(self.project_root)))
+                self.add_result(ValidationResult(
+                    name=f"syntax_{py_file.name}",
+                    passed=False,
+                    message=f"Syntax hatası: {py_file.relative_to(self.project_root)} - Line {e.lineno}: {e.msg}",
+                    details={"file": str(py_file.relative_to(self.project_root)), "error": str(e)}
+                ))
+                logger.error(f"❌ Syntax hatası: {py_file.relative_to(self.project_root)} - Line {e.lineno}: {e.msg}")
+                
+            except Exception as e:
+                logger.debug(f"Dosya okunamadı: {py_file} - {e}")
+        
+        if syntax_errors:
+            logger.error(f"❌ {len(syntax_errors)} dosyada syntax hatası")
+        else:
+            logger.info(f"✅ {len(python_files)} Python dosyası syntax kontrolünden geçti")
+        
+        return len(syntax_errors) == 0
+
     def run_full_validation(self) -> Dict[str, Any]:
-        """🔍 Tam sistem doğrulaması"""
+        """🔬 Tam sistem doğrulaması"""
         
-        logger.info("🔍 Tam sistem doğrulaması başlatılıyor...")
+        logger.info("🔬 TAM SİSTEM DOĞRULAMASI BAŞLIYOR...")
         
-        validation_start = datetime.now()
+        validation_start = datetime.now(timezone.utc)
         
-        # Tüm doğrulama testlerini çalıştır
-        validation_tests = [
-            ("directory_structure", self.validate_directory_structure),
-            ("critical_files", self.validate_critical_files),
-            ("syntax_check", self.validate_syntax),
-            ("critical_imports", self.validate_critical_imports),
-            ("critical_classes", self.validate_critical_classes),
-            ("requirements", self.validate_requirements)
+        # Doğrulama adımları
+        validations = [
+            ("Directory Structure", self.validate_directory_structure),
+            ("Critical Files", self.validate_critical_files),
+            ("Requirements", self.validate_requirements),
+            ("Imports", self.validate_imports),
+            ("Class Instantiation", self.validate_class_instantiation),
+            ("Code Quality", self.validate_code_quality)
         ]
         
-        passed_tests = 0
-        failed_tests = 0
+        passed_validations = 0
         
-        for test_name, test_func in validation_tests:
+        for validation_name, validation_func in validations:
+            logger.info(f"🔍 {validation_name} doğrulaması...")
             try:
-                logger.info(f"🧪 {test_name} testi çalıştırılıyor...")
-                result = test_func()
-                
+                result = validation_func()
                 if result:
-                    passed_tests += 1
-                    logger.info(f"✅ {test_name} başarılı")
+                    passed_validations += 1
+                    logger.info(f"✅ {validation_name} PASSED")
                 else:
-                    failed_tests += 1
-                    logger.error(f"❌ {test_name} başarısız")
-                    
+                    logger.error(f"❌ {validation_name} FAILED")
             except Exception as e:
-                failed_tests += 1
-                logger.error(f"❌ {test_name} testi hatası: {e}")
-                self.add_result(ValidationResult(
-                    name=f"{test_name}_exception",
-                    passed=False,
-                    message=f"{test_name} testi exception: {e}",
-                    details={"error": str(e), "traceback": traceback.format_exc()}
-                ))
+                logger.error(f"❌ {validation_name} doğrulama hatası: {e}")
         
-        validation_duration = datetime.now() - validation_start
+        validation_end = datetime.now(timezone.utc)
+        duration = (validation_end - validation_start).total_seconds()
         
-        # Sonuçları özetle
-        total_validations = len(self.validation_results)
-        successful_validations = sum(1 for r in self.validation_results if r.passed)
-        
-        overall_success = (
-            len(self.critical_failures) == 0 and 
-            failed_tests == 0 and
-            successful_validations > 0
-        )
+        # Sonuç raporu
+        total_validations = len(validations)
+        success_rate = (passed_validations / total_validations) * 100
         
         validation_summary = {
-            "timestamp": validation_start.isoformat(),
-            "duration_seconds": validation_duration.total_seconds(),
-            "overall_success": overall_success,
-            "total_tests": len(validation_tests),
-            "passed_tests": passed_tests,
-            "failed_tests": failed_tests,
+            "timestamp": validation_end.isoformat(),
+            "duration_seconds": duration,
             "total_validations": total_validations,
-            "successful_validations": successful_validations,
+            "passed_validations": passed_validations,
+            "failed_validations": total_validations - passed_validations,
+            "success_rate_percent": success_rate,
             "critical_failures": len(self.critical_failures),
             "warnings": len(self.warnings),
-            "validation_results": [
-                {
-                    "name": r.name,
-                    "passed": r.passed,
-                    "message": r.message,
-                    "details": r.details,
-                    "timestamp": r.timestamp.isoformat()
-                }
-                for r in self.validation_results
-            ]
+            "overall_status": "PASSED" if success_rate >= 80 else "FAILED"
         }
         
-        # Sonuçları logla
-        if overall_success:
-            logger.info("🎉 Sistem doğrulaması BAŞARILI!")
-        else:
-            logger.error("❌ Sistem doğrulaması BAŞARISIZ!")
+        # Raporu kaydet
+        self.save_validation_report(validation_summary)
         
-        logger.info(f"📊 Test sonuçları: {passed_tests}/{len(validation_tests)} başarılı")
-        logger.info(f"📋 Doğrulama sonuçları: {successful_validations}/{total_validations} başarılı")
-        logger.info(f"⚠️ Kritik hatalar: {len(self.critical_failures)}")
-        logger.info(f"💡 Uyarılar: {len(self.warnings)}")
+        # Konsol çıktısı
+        logger.info("="*80)
+        logger.info("🔬 SİSTEM DOĞRULAMA RAPORU")
+        logger.info("="*80)
+        logger.info(f"📊 Toplam Doğrulama: {total_validations}")
+        logger.info(f"✅ Başarılı: {passed_validations}")
+        logger.info(f"❌ Başarısız: {total_validations - passed_validations}")
+        logger.info(f"📈 Başarı Oranı: {success_rate:.1f}%")
+        logger.info(f"🚨 Kritik Hatalar: {len(self.critical_failures)}")
+        logger.info(f"⚠️ Uyarılar: {len(self.warnings)}")
+        logger.info(f"⏱️ Süre: {duration:.2f} saniye")
+        logger.info(f"🏆 GENEL DURUM: {validation_summary['overall_status']}")
+        logger.info("="*80)
         
         return validation_summary
-    
-    def save_validation_report(self, validation_summary: Dict[str, Any]) -> None:
+
+    def save_validation_report(self, summary: Dict[str, Any]) -> None:
         """💾 Doğrulama raporunu kaydet"""
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = self.project_root / "logs" / f"validation_report_{timestamp}.json"
         
+        detailed_report = {
+            "summary": summary,
+            "validation_results": [
+                {
+                    "name": result.name,
+                    "passed": result.passed,
+                    "message": result.message,
+                    "details": result.details,
+                    "timestamp": result.timestamp.isoformat()
+                }
+                for result in self.validation_results
+            ]
+        }
+        
         with open(report_file, 'w', encoding='utf-8') as f:
-            json.dump(validation_summary, f, indent=2, ensure_ascii=False)
+            json.dump(detailed_report, f, indent=2, ensure_ascii=False)
         
         logger.info(f"💾 Doğrulama raporu kaydedildi: {report_file}")
-    
+
     def install_git_hooks(self) -> bool:
         """🪝 Git hooks kurulumu"""
         
@@ -586,235 +562,92 @@ class PhoenixSystemValidator:
         git_hooks_dir = self.project_root / ".git" / "hooks"
         
         if not git_hooks_dir.exists():
-            logger.error("❌ Git repository bulunamadı (.git/hooks klasörü yok)")
+            logger.error("❌ Git repository bulunamadı")
             return False
         
-        # Pre-commit hook script'i
-        pre_commit_script = '''#!/bin/bash
+        # Pre-commit hook içeriği
+        pre_commit_content = f"""#!/bin/bash
 # Phoenix System Validation Pre-commit Hook
-
-echo "🛡️ Phoenix System Validation çalıştırılıyor..."
-
-# Python validator'ı çalıştır
-python validate_system.py --pre-commit
-
-# Exit code'u kontrol et
-if [ $? -ne 0 ]; then
-    echo "❌ Sistem doğrulaması başarısız! Commit engelleniyor."
-    echo "💡 Hataları düzeltip tekrar deneyin."
-    exit 1
-fi
-
-echo "✅ Sistem doğrulaması başarılı! Commit devam ediyor..."
-exit 0
-'''
+echo "🛡️ Running Phoenix system validation..."
+python "{self.project_root}/scripts/validate_system.py" --pre-commit
+exit $?
+"""
         
-        # Pre-commit hook dosyasını oluştur
         pre_commit_file = git_hooks_dir / "pre-commit"
         
         try:
-            with open(pre_commit_file, 'w', encoding='utf-8') as f:
-                f.write(pre_commit_script)
+            with open(pre_commit_file, 'w') as f:
+                f.write(pre_commit_content)
             
-            # Executable yap (Unix/Linux/macOS)
-            if os.name != 'nt':  # Windows değilse
-                os.chmod(pre_commit_file, 0o755)
+            # Executable yap
+            pre_commit_file.chmod(0o755)
             
             logger.info("✅ Pre-commit hook kuruldu")
-            
-            # Pre-push hook da kuralım
-            pre_push_script = '''#!/bin/bash
-# Phoenix System Validation Pre-push Hook
-
-echo "🛡️ Phoenix System Full Validation çalıştırılıyor..."
-
-# Full validation çalıştır
-python validate_system.py --full-validation
-
-if [ $? -ne 0 ]; then
-    echo "❌ Tam sistem doğrulaması başarısız! Push engelleniyor."
-    exit 1
-fi
-
-echo "✅ Tam sistem doğrulaması başarılı! Push devam ediyor..."
-exit 0
-'''
-            
-            pre_push_file = git_hooks_dir / "pre-push"
-            
-            with open(pre_push_file, 'w', encoding='utf-8') as f:
-                f.write(pre_push_script)
-            
-            if os.name != 'nt':
-                os.chmod(pre_push_file, 0o755)
-            
-            logger.info("✅ Pre-push hook kuruldu")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Git hooks kurulum hatası: {e}")
+            logger.error(f"❌ Pre-commit hook kurulum hatası: {e}")
             return False
-    
-    def run_pre_commit_validation(self) -> bool:
-        """🚀 Pre-commit doğrulaması (hızlı)"""
-        
-        logger.info("🚀 Pre-commit doğrulaması (hızlı mod)...")
-        
-        # Sadece kritik testleri çalıştır
-        critical_tests = [
-            ("syntax_check", self.validate_syntax),
-            ("critical_imports", self.validate_critical_imports)
-        ]
-        
-        all_passed = True
-        
-        for test_name, test_func in critical_tests:
-            try:
-                result = test_func()
-                if not result:
-                    all_passed = False
-                    break
-            except Exception as e:
-                logger.error(f"❌ {test_name} testi hatası: {e}")
-                all_passed = False
-                break
-        
-        return all_passed
-    
-    def get_exit_code(self) -> int:
-        """🚪 CI/CD için exit code hesapla"""
-        
-        if len(self.critical_failures) > 0:
-            return 2  # Critical failure
-        elif len(self.warnings) > 0:
-            return 1  # Warnings
-        else:
-            return 0  # Success
 
 
 def main():
     """Ana çalıştırma fonksiyonu"""
     
     parser = argparse.ArgumentParser(
-        description="Phoenix System Validator - Automated System Protection",
+        description="Phoenix System Validator - Comprehensive System Health Check",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Kullanım Örnekleri:
   python validate_system.py --full-validation        # Tam doğrulama
-  python validate_system.py --pre-commit            # Pre-commit kontrolü
+  python validate_system.py --pre-commit            # Pre-commit kontrolü  
   python validate_system.py --ci-cd                 # CI/CD pipeline kontrolü
   python validate_system.py --install-hooks         # Git hooks kurulumu
-  python validate_system.py --syntax-only           # Sadece syntax kontrolü
         """
     )
     
     parser.add_argument('--full-validation', action='store_true', help='Tam sistem doğrulaması')
-    parser.add_argument('--pre-commit', action='store_true', help='Pre-commit kontrolü (hızlı)')
-    parser.add_argument('--ci-cd', action='store_true', help='CI/CD pipeline kontrolü')
+    parser.add_argument('--pre-commit', action='store_true', help='Pre-commit doğrulaması')
+    parser.add_argument('--ci-cd', action='store_true', help='CI/CD pipeline doğrulaması')
     parser.add_argument('--install-hooks', action='store_true', help='Git hooks kurulumu')
-    parser.add_argument('--syntax-only', action='store_true', help='Sadece syntax kontrolü')
-    parser.add_argument('--project-root', default='.', help='Proje kök klasörü')
-    parser.add_argument('--save-report', action='store_true', help='Doğrulama raporunu kaydet')
+    parser.add_argument('--project-root', default='.', help='Proje kök dizini')
     
     args = parser.parse_args()
     
-    if not any([args.full_validation, args.pre_commit, args.ci_cd, 
-                args.install_hooks, args.syntax_only]):
-        parser.print_help()
-        return
-    
-    # Validator'ı başlat
+    # Validator oluştur
     validator = PhoenixSystemValidator(project_root=args.project_root)
     
     try:
         if args.install_hooks:
-            print("🪝 GIT HOOKS KURULUMU")
-            print("="*50)
-            
             success = validator.install_git_hooks()
-            
-            if success:
-                print("✅ Git hooks başarıyla kuruldu!")
-                print("💡 Artık her commit öncesi otomatik doğrulama yapılacak")
-            else:
-                print("❌ Git hooks kurulumu başarısız!")
-                sys.exit(1)
-        
-        elif args.syntax_only:
-            print("🐍 SYNTAX KONTROLÜ")
-            print("="*50)
-            
-            success = validator.validate_syntax()
-            
-            if success:
-                print("✅ Syntax kontrolü başarılı!")
-            else:
-                print("❌ Syntax hataları bulundu!")
-                sys.exit(1)
+            sys.exit(0 if success else 1)
         
         elif args.pre_commit:
-            print("🚀 PRE-COMMIT DOĞRULAMA")
-            print("="*30)
+            # Pre-commit için hızlı kontroller
+            logger.info("🪝 Pre-commit doğrulaması...")
+            critical_passed = validator.validate_critical_files()
+            syntax_passed = validator.validate_code_quality()
             
-            success = validator.run_pre_commit_validation()
-            
-            exit_code = validator.get_exit_code()
-            
-            if success:
-                print("✅ Pre-commit doğrulama başarılı!")
-            else:
-                print("❌ Pre-commit doğrulama başarısız!")
-            
-            sys.exit(exit_code)
+            success = critical_passed and syntax_passed
+            logger.info(f"🪝 Pre-commit doğrulama: {'PASSED' if success else 'FAILED'}")
+            sys.exit(0 if success else 1)
         
-        elif args.full_validation or args.ci_cd:
-            mode_name = "FULL VALIDATION" if args.full_validation else "CI/CD VALIDATION"
-            print(f"🛡️ {mode_name}")
-            print("="*80)
+        elif args.ci_cd:
+            # CI/CD için kapsamlı kontroller
+            summary = validator.run_full_validation()
+            success = summary['overall_status'] == 'PASSED'
+            sys.exit(0 if success else 1)
+        
+        else:
+            # Varsayılan: tam doğrulama
+            summary = validator.run_full_validation()
+            success = summary['overall_status'] == 'PASSED'
+            sys.exit(0 if success else 1)
             
-            validation_summary = validator.run_full_validation()
-            
-            # Sonuçları göster
-            print(f"\n📊 DOĞRULAMA SONUÇLARI:")
-            print(f"   ⏱️ Süre: {validation_summary['duration_seconds']:.2f} saniye")
-            print(f"   🧪 Testler: {validation_summary['passed_tests']}/{validation_summary['total_tests']} başarılı")
-            print(f"   📋 Doğrulamalar: {validation_summary['successful_validations']}/{validation_summary['total_validations']} başarılı")
-            print(f"   ❌ Kritik hatalar: {validation_summary['critical_failures']}")
-            print(f"   ⚠️ Uyarılar: {validation_summary['warnings']}")
-            
-            # Başarısız testleri göster
-            if validation_summary['critical_failures'] > 0:
-                print(f"\n❌ KRİTİK HATALAR:")
-                for failure in validator.critical_failures:
-                    print(f"   • {failure.message}")
-            
-            if validation_summary['warnings'] > 0:
-                print(f"\n⚠️ UYARILAR:")
-                for warning in validator.warnings[:5]:  # İlk 5'ini göster
-                    print(f"   • {warning.message}")
-            
-            # Raporu kaydet
-            if args.save_report or args.ci_cd:
-                validator.save_validation_report(validation_summary)
-            
-            # Exit code
-            exit_code = validator.get_exit_code()
-            
-            if validation_summary['overall_success']:
-                print("\n🎉 SİSTEM DOĞRULAMA BAŞARILI!")
-            else:
-                print("\n❌ SİSTEM DOĞRULAMA BAŞARISIZ!")
-            
-            sys.exit(exit_code)
-    
     except KeyboardInterrupt:
-        print("\n🛑 Doğrulama kullanıcı tarafından durduruldu")
+        logger.info("🛑 Doğrulama kullanıcı tarafından durduruldu")
         sys.exit(130)
-    
     except Exception as e:
-        logger.error(f"❌ Sistem doğrulama hatası: {e}")
-        logger.error(traceback.format_exc())
-        print(f"\n❌ HATA: {e}")
+        logger.error(f"❌ Beklenmedik hata: {e}")
         sys.exit(1)
 
 

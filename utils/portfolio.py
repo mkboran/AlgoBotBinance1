@@ -6,8 +6,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from utils.logger import logger 
-from utils.config import settings
+try:
+    from utils.logger import logger
+except ImportError:
+    import logging
+    logger = logging.getLogger('phoenix') 
+try:
+    from utils.config import settings
+except ImportError:
+    class DummySettings:
+        SYMBOL = 'BTC/USDT'
+    settings = DummySettings()
 
 class Position:
     """🚀 MOMENTUM ULTRA OPTIMIZED Position Class"""

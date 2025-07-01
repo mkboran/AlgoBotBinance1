@@ -40,7 +40,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from utils.config import settings
 from utils.logger import logger
 from parameter_spaces import get_parameter_space
-from optimization.objective_fixed import run_objective
+from create_objective_fixed import run_objective
 
 # Logging setup
 logging.basicConfig(

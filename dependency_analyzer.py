@@ -28,8 +28,16 @@ from typing import Dict, List, Set, Any, Optional, Tuple
 import argparse
 import json
 import re
+import traceback
 from collections import defaultdict, deque
-import networkx as nx
+try:
+    import networkx as nx
+    NETWORKX_AVAILABLE = True
+except ImportError:
+    NETWORKX_AVAILABLE = False
+
+# Logging için logs klasörünü oluştur
+Path("logs").mkdir(exist_ok=True)
 
 # Logging yapılandırması
 logging.basicConfig(
@@ -88,124 +96,99 @@ class DependencyAnalyzer:
     def __init__(self, project_root: str = "."):
         self.project_root = Path(project_root)
         
-        # Logs klasörünü oluştur
-        (self.project_root / "logs").mkdir(exist_ok=True)
+        # Logs klasörünü oluştur (yoksa otomatik oluştur)
+        logs_dir = self.project_root / "logs"
+        logs_dir.mkdir(exist_ok=True)
+        
+        # Log dosyasını oluştur (yoksa)
+        log_file = logs_dir / "dependency_analysis.log"
+        if not log_file.exists():
+            log_file.touch()
         
         # Analiz sonuçları
-        self.file_dependencies = {}
-        self.all_imports = set()
-        self.external_packages = set()
-        self.local_modules = set()
-        self.dependency_graph = nx.DiGraph()
+        self.file_imports = {}
+        self.all_external_imports = set()
+        self.all_local_imports = set()
+        self.dependency_graph = nx.DiGraph() if NETWORKX_AVAILABLE else {}
         
-        # Python built-in modules
-        self.builtin_modules = set(sys.builtin_module_names)
-        self.standard_library = self._get_standard_library_modules()
-        
-        # Proje spesifik modüller
-        self.project_modules = {'utils', 'strategies', 'optimization', 'scripts'}
+        # Standart kütüphane modülleri (bu modülleri requirements'a eklemeyelim)
+        self.stdlib_modules = {
+            'os', 'sys', 'datetime', 'time', 'json', 'csv', 'math', 'random',
+            'collections', 'itertools', 'functools', 'operator', 'pathlib',
+            'logging', 'argparse', 'subprocess', 'threading', 'multiprocessing',
+            'asyncio', 'typing', 'dataclasses', 'enum', 're', 'ast', 'inspect',
+            'warnings', 'traceback', 'tempfile', 'shutil', 'glob', 'pickle',
+            'sqlite3', 'urllib', 'http', 'email', 'base64', 'hashlib',
+            'uuid', 'decimal', 'fractions', 'statistics', 'copy', 'gc'
+        }
         
         logger.info("🔍 Dependency Analyzer başlatıldı")
         logger.info(f"📁 Proje kökü: {self.project_root.absolute()}")
     
-    def _get_standard_library_modules(self) -> Set[str]:
-        """Python standard library modüllerini tespit et"""
-        
-        # Python 3.x standard library modüllerinin bir listesi
-        stdlib_modules = {
-            'abc', 'argparse', 'array', 'ast', 'asyncio', 'base64', 'bisect',
-            'calendar', 'collections', 'copy', 'csv', 'datetime', 'decimal',
-            'functools', 'glob', 'gzip', 'hashlib', 'heapq', 'html', 'http',
-            'importlib', 'io', 'itertools', 'json', 'logging', 'math', 'multiprocessing',
-            'operator', 'os', 'pathlib', 'pickle', 'random', 're', 'shutil',
-            'socket', 'sqlite3', 'string', 'subprocess', 'sys', 'tempfile',
-            'threading', 'time', 'traceback', 'typing', 'urllib', 'uuid',
-            'warnings', 'weakref', 'xml', 'zipfile', 'enum', 'dataclasses',
-            'contextlib', 'concurrent', 'email', 'encodings'
-        }
-        
-        return stdlib_modules
-    
     def analyze_file(self, file_path: Path) -> Dict[str, Any]:
-        """📄 Tek dosyayı analiz et"""
+        """📄 Tek dosyanın import analizini yap"""
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+                source = f.read()
             
-            # AST parse
-            tree = ast.parse(content, filename=str(file_path))
-            
-            # Import analyzer
+            tree = ast.parse(source)
             analyzer = ImportAnalyzer()
             analyzer.visit(tree)
             
-            # Sonuçları organize et
-            file_analysis = {
-                "file_path": str(file_path),
-                "relative_path": str(file_path.relative_to(self.project_root)),
+            # External imports (non-stdlib, non-local)
+            external_imports = set()
+            for imp in analyzer.imports.union(analyzer.from_imports):
+                root_module = imp.split('.')[0]
+                if (root_module not in self.stdlib_modules and 
+                    not imp.startswith('.') and 
+                    root_module not in ['utils', 'strategies', 'optimization', 'backtesting', 'scripts']):
+                    external_imports.add(root_module)
+            
+            analysis = {
+                "file_path": str(file_path.relative_to(self.project_root)),
                 "imports": list(analyzer.imports),
                 "from_imports": list(analyzer.from_imports),
                 "local_imports": list(analyzer.local_imports),
+                "external_imports": list(external_imports),
                 "import_details": analyzer.import_details,
                 "total_imports": len(analyzer.imports) + len(analyzer.from_imports),
-                "external_dependencies": [],
-                "local_dependencies": []
+                "lines_of_code": len(source.splitlines())
             }
             
-            # External vs local classification
-            all_imported_modules = analyzer.imports | analyzer.from_imports
+            # Dependency graph'a ekle
+            if NETWORKX_AVAILABLE:
+                file_node = str(file_path.relative_to(self.project_root))
+                for imp in analyzer.imports.union(analyzer.from_imports):
+                    self.dependency_graph.add_edge(file_node, imp)
             
-            for module in all_imported_modules:
-                base_module = module.split('.')[0]
-                
-                if base_module in self.builtin_modules or base_module in self.standard_library:
-                    # Built-in or standard library
-                    continue
-                elif base_module in self.project_modules or module.startswith('.'):
-                    # Local project module
-                    file_analysis["local_dependencies"].append(module)
-                    self.local_modules.add(module)
-                else:
-                    # External package
-                    file_analysis["external_dependencies"].append(base_module)
-                    self.external_packages.add(base_module)
+            # Global setlere ekle
+            self.all_external_imports.update(external_imports)
             
-            return file_analysis
+            return analysis
             
         except SyntaxError as e:
-            logger.warning(f"⚠️ Syntax error in {file_path}: {e}")
-            return {"file_path": str(file_path), "error": "syntax_error", "details": str(e)}
-        
+            logger.error(f"❌ Syntax error in {file_path}: {e}")
+            return {"error": f"Syntax error: {e}", "file_path": str(file_path)}
         except Exception as e:
             logger.error(f"❌ Error analyzing {file_path}: {e}")
-            return {"file_path": str(file_path), "error": "analysis_error", "details": str(e)}
+            return {"error": str(e), "file_path": str(file_path)}
     
-    def analyze_project(self) -> Dict[str, Any]:
-        """🔍 Tüm projeyi analiz et"""
+    def analyze_all_files(self) -> Dict[str, Any]:
+        """📂 Tüm Python dosyalarını analiz et"""
         
-        logger.info("🔍 Proje analizi başlatılıyor...")
+        logger.info("📂 Tüm Python dosyaları analiz ediliyor...")
         
-        # Tüm Python dosyalarını bul
+        # Python dosyalarını bul
         python_files = []
+        for pattern in ["*.py", "**/*.py"]:
+            python_files.extend(self.project_root.glob(pattern))
         
-        # Ana klasörler
-        search_paths = [
-            self.project_root,
-            self.project_root / "utils",
-            self.project_root / "strategies", 
-            self.project_root / "optimization",
-            self.project_root / "scripts"
+        # __pycache__ ve .git klasörlerini filtrele
+        python_files = [
+            f for f in python_files 
+            if "__pycache__" not in str(f) and ".git" not in str(f)
         ]
-        
-        for search_path in search_paths:
-            if search_path.exists():
-                python_files.extend(search_path.glob("*.py"))
-                # Alt klasörlerde de ara
-                python_files.extend(search_path.glob("*/*.py"))
-        
-        # Duplike dosyaları kaldır
-        python_files = list(set(python_files))
         
         logger.info(f"📊 {len(python_files)} Python dosyası bulundu")
         
@@ -213,206 +196,158 @@ class DependencyAnalyzer:
         analysis_results = {}
         successful_analyses = 0
         
-        for file_path in python_files:
-            try:
-                file_analysis = self.analyze_file(file_path)
-                relative_path = str(file_path.relative_to(self.project_root))
-                analysis_results[relative_path] = file_analysis
-                
-                if "error" not in file_analysis:
-                    successful_analyses += 1
-                    
-                    # Dependency graph'e ekle
-                    self._add_to_dependency_graph(file_analysis)
-                
-            except Exception as e:
-                logger.error(f"❌ {file_path} analiz hatası: {e}")
+        for py_file in python_files:
+            file_analysis = self.analyze_file(py_file)
+            file_key = str(py_file.relative_to(self.project_root))
+            analysis_results[file_key] = file_analysis
+            
+            if "error" not in file_analysis:
+                successful_analyses += 1
+                self.file_imports[file_key] = file_analysis
         
         logger.info(f"✅ {successful_analyses}/{len(python_files)} dosya başarıyla analiz edildi")
         
-        # Analiz özetini oluştur
-        project_analysis = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "project_root": str(self.project_root.absolute()),
+        return {
             "total_files": len(python_files),
             "successful_analyses": successful_analyses,
-            "file_analyses": analysis_results,
-            "summary": self._generate_analysis_summary(),
-            "dependency_graph_info": self._analyze_dependency_graph()
-        }
-        
-        self.file_dependencies = analysis_results
-        
-        return project_analysis
-    
-    def _add_to_dependency_graph(self, file_analysis: Dict[str, Any]) -> None:
-        """📈 Bağımlılık grafiğine dosya ekle"""
-        
-        file_path = file_analysis["relative_path"]
-        
-        # Node'u ekle
-        self.dependency_graph.add_node(file_path)
-        
-        # Local dependencies için edge'leri ekle
-        for dep in file_analysis.get("local_dependencies", []):
-            # Relative import'ları düzelt
-            if dep.startswith('.'):
-                # TODO: Relative import resolution
-                continue
-            
-            # Module path'i dosya path'ine çevir
-            potential_paths = [
-                f"{dep.replace('.', '/')}.py",
-                f"{dep.replace('.', '/')}/{dep.split('.')[-1]}.py",
-                f"{dep}/{dep.split('.')[-1]}.py"
-            ]
-            
-            for pot_path in potential_paths:
-                if pot_path in self.file_dependencies:
-                    self.dependency_graph.add_edge(file_path, pot_path)
-                    break
-    
-    def _generate_analysis_summary(self) -> Dict[str, Any]:
-        """📊 Analiz özetini oluştur"""
-        
-        # External packages'i topla
-        all_external = set()
-        all_local = set()
-        total_imports = 0
-        
-        for file_analysis in self.file_dependencies.values():
-            if "error" not in file_analysis:
-                all_external.update(file_analysis.get("external_dependencies", []))
-                all_local.update(file_analysis.get("local_dependencies", []))
-                total_imports += file_analysis.get("total_imports", 0)
-        
-        return {
-            "total_external_packages": len(all_external),
-            "external_packages": sorted(list(all_external)),
-            "total_local_modules": len(all_local),
-            "local_modules": sorted(list(all_local)),
-            "total_imports": total_imports,
-            "most_used_externals": self._get_most_used_packages(all_external),
-            "dependency_statistics": self._calculate_dependency_stats()
+            "failed_analyses": len(python_files) - successful_analyses,
+            "all_external_imports": sorted(list(self.all_external_imports)),
+            "total_external_imports": len(self.all_external_imports),
+            "file_analyses": analysis_results
         }
     
-    def _get_most_used_packages(self, external_packages: Set[str]) -> List[Tuple[str, int]]:
-        """📈 En çok kullanılan paketleri bul"""
+    def check_circular_dependencies(self) -> Dict[str, Any]:
+        """🔄 Döngüsel bağımlılık kontrolü"""
         
-        package_counts = defaultdict(int)
+        logger.info("🔄 Döngüsel bağımlılık kontrolü...")
         
-        for file_analysis in self.file_dependencies.values():
-            if "error" not in file_analysis:
-                for pkg in file_analysis.get("external_dependencies", []):
-                    package_counts[pkg] += 1
+        if not NETWORKX_AVAILABLE:
+            logger.warning("⚠️ NetworkX bulunamadı, döngüsel bağımlılık analizi atlanıyor")
+            return {"error": "NetworkX not available"}
         
-        # Sırala ve döndür
-        return sorted(package_counts.items(), key=lambda x: x[1], reverse=True)
-    
-    def _calculate_dependency_stats(self) -> Dict[str, Any]:
-        """📊 Bağımlılık istatistiklerini hesapla"""
-        
-        external_counts = []
-        local_counts = []
-        
-        for file_analysis in self.file_dependencies.values():
-            if "error" not in file_analysis:
-                external_counts.append(len(file_analysis.get("external_dependencies", [])))
-                local_counts.append(len(file_analysis.get("local_dependencies", [])))
-        
-        if not external_counts:
-            return {"error": "No valid files to analyze"}
-        
-        return {
-            "avg_external_deps_per_file": sum(external_counts) / len(external_counts),
-            "max_external_deps": max(external_counts),
-            "avg_local_deps_per_file": sum(local_counts) / len(local_counts),
-            "max_local_deps": max(local_counts),
-            "files_with_most_external_deps": self._find_files_with_most_deps("external"),
-            "files_with_most_local_deps": self._find_files_with_most_deps("local")
-        }
-    
-    def _find_files_with_most_deps(self, dep_type: str) -> List[Tuple[str, int]]:
-        """📋 En çok bağımlılığa sahip dosyaları bul"""
-        
-        file_dep_counts = []
-        dep_key = f"{dep_type}_dependencies"
-        
-        for relative_path, file_analysis in self.file_dependencies.items():
-            if "error" not in file_analysis:
-                dep_count = len(file_analysis.get(dep_key, []))
-                file_dep_counts.append((relative_path, dep_count))
-        
-        return sorted(file_dep_counts, key=lambda x: x[1], reverse=True)[:10]
-    
-    def _analyze_dependency_graph(self) -> Dict[str, Any]:
-        """📈 Bağımlılık grafiği analizini yap"""
-        
-        if not self.dependency_graph.nodes():
-            return {"error": "Empty dependency graph"}
+        cycles = []
         
         try:
-            # Temel graph metrics
-            metrics = {
-                "node_count": self.dependency_graph.number_of_nodes(),
-                "edge_count": self.dependency_graph.number_of_edges(),
-                "is_directed": self.dependency_graph.is_directed(),
-                "density": nx.density(self.dependency_graph)
-            }
+            # Find cycles in dependency graph
+            cycle_generator = nx.simple_cycles(self.dependency_graph)
+            for cycle in cycle_generator:
+                if len(cycle) > 1:  # Self-loops'ları dahil etme
+                    cycles.append(cycle)
+        
+        except Exception as e:
+            logger.error(f"❌ Döngüsel bağımlılık kontrolü hatası: {e}")
+            return {"error": str(e)}
+        
+        if cycles:
+            logger.warning(f"⚠️ {len(cycles)} döngüsel bağımlılık tespit edildi")
+            for i, cycle in enumerate(cycles):
+                logger.warning(f"  Döngü {i+1}: {' -> '.join(cycle)} -> {cycle[0]}")
+        else:
+            logger.info("✅ Döngüsel bağımlılık bulunamadı")
+        
+        return {
+            "has_cycles": len(cycles) > 0,
+            "cycle_count": len(cycles),
+            "cycles": cycles
+        }
+    
+    def detect_unused_imports(self) -> Dict[str, Any]:
+        """🗑️ Kullanılmayan import'ları tespit et"""
+        
+        logger.info("🗑️ Kullanılmayan importlar tespit ediliyor...")
+        
+        unused_imports = {}
+        
+        for file_path, analysis in self.file_imports.items():
+            file_unused = []
             
-            # Döngüsel bağımlılık kontrolü
             try:
-                cycles = list(nx.simple_cycles(self.dependency_graph))
-                metrics["circular_dependencies"] = cycles
-                metrics["has_circular_deps"] = len(cycles) > 0
-                metrics["circular_dependency_count"] = len(cycles)
+                # Dosyayı tekrar oku
+                full_path = self.project_root / file_path
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Import details'leri kontrol et
+                for import_detail in analysis.get("import_details", []):
+                    if import_detail["type"] == "import":
+                        module_name = import_detail["module"]
+                        alias = import_detail.get("alias", module_name)
+                        
+                        # Kullanım kontrolü (basit)
+                        if alias not in content.split('\n')[import_detail["line"]:]:
+                            # Import satırından sonra kullanılmıyor
+                            import_usage_count = content.count(alias)
+                            if import_usage_count <= 1:  # Sadece import satırında geçiyor
+                                file_unused.append(import_detail)
+            
             except Exception as e:
-                metrics["circular_dependency_error"] = str(e)
+                logger.debug(f"Unused import detection error for {file_path}: {e}")
             
-            # En çok bağımlılığa sahip dosyalar
-            in_degrees = dict(self.dependency_graph.in_degree())
-            out_degrees = dict(self.dependency_graph.out_degree())
+            if file_unused:
+                unused_imports[file_path] = file_unused
+        
+        total_unused = sum(len(imports) for imports in unused_imports.values())
+        
+        if total_unused > 0:
+            logger.warning(f"⚠️ {total_unused} kullanılmayan import tespit edildi")
+        else:
+            logger.info("✅ Kullanılmayan import bulunamadı")
+        
+        return {
+            "total_unused": total_unused,
+            "files_with_unused": len(unused_imports),
+            "unused_imports": unused_imports
+        }
+    
+    def _get_package_version(self, package_name: str) -> Optional[str]:
+        """📦 Paket versiyonunu al"""
+        
+        try:
+            # pip show komutu ile versiyon bilgisi al
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "show", package_name],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
             
-            metrics["most_dependent_files"] = sorted(
-                in_degrees.items(), key=lambda x: x[1], reverse=True
-            )[:10]
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.startswith('Version:'):
+                        return line.split(':')[1].strip()
             
-            metrics["most_depended_upon"] = sorted(
-                out_degrees.items(), key=lambda x: x[1], reverse=True  
-            )[:10]
-            
-            return metrics
+            return None
             
         except Exception as e:
-            return {"error": f"Graph analysis failed: {e}"}
+            logger.debug(f"Version detection error for {package_name}: {e}")
+            return None
     
     def generate_requirements_txt(self, include_versions: bool = True) -> str:
-        """📋 requirements.txt oluştur"""
+        """📋 Requirements.txt içeriği oluştur"""
         
-        logger.info("📋 requirements.txt oluşturuluyor...")
+        logger.info("📋 Requirements.txt oluşturuluyor...")
         
-        if not self.external_packages:
-            logger.warning("⚠️ External package bulunamadı")
-            return "# No external dependencies found\n"
-        
-        requirements_lines = []
-        requirements_lines.append("# Generated by Phoenix Dependency Analyzer")
-        requirements_lines.append(f"# Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        requirements_lines.append(f"# Total packages: {len(self.external_packages)}")
-        requirements_lines.append("")
-        
-        # Paketleri kategorilendir
+        # Kategorilere ayır
         categorized_packages = self._categorize_packages()
+        
+        requirements_lines = [
+            "# ========================================================================================",
+            "# 🚀 PROJE PHOENIX - AUTO-GENERATED REQUIREMENTS",
+            "# 💎 Production-Ready Dependencies for Algorithmic Trading Platform",
+            "# ========================================================================================",
+            ""
+        ]
         
         for category, packages in categorized_packages.items():
             if packages:
                 requirements_lines.append(f"# {category}")
+                requirements_lines.append("# " + "="*60)
                 
                 for package in sorted(packages):
                     if include_versions:
                         version = self._get_package_version(package)
                         if version:
-                            requirements_lines.append(f"{package}=={version}")
+                            requirements_lines.append(f"{package}>={version}")
                         else:
                             requirements_lines.append(f"{package}  # Version not detected")
                     else:
@@ -433,6 +368,7 @@ class DependencyAnalyzer:
             "Optimization": [],
             "Visualization": [],
             "Testing & Development": [],
+            "System Utilities": [],
             "Other": []
         }
         
@@ -441,116 +377,57 @@ class DependencyAnalyzer:
             "Core Data Science": ["pandas", "numpy", "scipy", "scikit-learn", "sklearn"],
             "Machine Learning": ["torch", "pytorch", "tensorflow", "keras", "xgboost", "lightgbm", "catboost"],
             "Trading & Finance": ["ccxt", "pandas_ta", "ta", "backtrader", "zipline", "quantlib"],
-            "Async & Networking": ["aiohttp", "asyncio", "requests", "websockets"],
-            "Optimization": ["optuna", "hyperopt", "skopt", "scipy.optimize"],
+            "Async & Networking": ["aiohttp", "asyncio-mqtt", "websockets", "requests"],
+            "Optimization": ["optuna", "hyperopt", "skopt", "scikit-optimize"],
             "Visualization": ["matplotlib", "seaborn", "plotly", "bokeh"],
-            "Testing & Development": ["pytest", "unittest", "mock", "coverage", "black", "flake8"]
+            "Testing & Development": ["pytest", "unittest", "mock", "coverage", "black", "flake8"],
+            "System Utilities": ["psutil", "python-dateutil", "pytz", "pydantic", "python-dotenv"]
         }
         
         # Paketleri kategorilere ata
         categorized = set()
         
         for category, keywords in category_mapping.items():
-            for package in self.external_packages:
+            for package in self.all_external_imports:
                 if any(keyword in package.lower() for keyword in keywords):
                     categories[category].append(package)
                     categorized.add(package)
         
-        # Kategorize edilmeyen paketleri "Other"a ekle
-        for package in self.external_packages:
+        # Kategorize edilmeyenleri "Other"a ekle
+        for package in self.all_external_imports:
             if package not in categorized:
                 categories["Other"].append(package)
         
-        return categories
-    
-    def _get_package_version(self, package_name: str) -> Optional[str]:
-        """📦 Paketin yüklü versiyonunu al"""
-        
-        try:
-            # pip show ile versiyon bilgisi al
-            result = subprocess.run(
-                ["pip", "show", package_name],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            
-            if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if line.startswith('Version:'):
-                        return line.split(':', 1)[1].strip()
-            
-            return None
-            
-        except Exception:
-            return None
-    
-    def check_circular_dependencies(self) -> Dict[str, Any]:
-        """🔄 Döngüsel bağımlılık kontrolü"""
-        
-        logger.info("🔄 Döngüsel bağımlılık kontrolü...")
-        
-        if not self.dependency_graph.nodes():
-            return {"error": "Dependency graph is empty"}
-        
-        try:
-            cycles = list(nx.simple_cycles(self.dependency_graph))
-            
-            circular_analysis = {
-                "has_circular_dependencies": len(cycles) > 0,
-                "circular_dependency_count": len(cycles),
-                "cycles": cycles,
-                "severity": "high" if len(cycles) > 0 else "none",
-                "recommendations": []
-            }
-            
-            if cycles:
-                logger.warning(f"⚠️ {len(cycles)} döngüsel bağımlılık tespit edildi!")
-                
-                for i, cycle in enumerate(cycles):
-                    logger.warning(f"   Cycle {i+1}: {' -> '.join(cycle)} -> {cycle[0]}")
-                    
-                    circular_analysis["recommendations"].append({
-                        "cycle": cycle,
-                        "suggestion": f"Break cycle by refactoring common functionality into a separate module"
-                    })
-            else:
-                logger.info("✅ Döngüsel bağımlılık bulunamadı")
-            
-            return circular_analysis
-            
-        except Exception as e:
-            logger.error(f"❌ Döngüsel bağımlılık kontrolü hatası: {e}")
-            return {"error": str(e)}
+        # Boş kategorileri kaldır
+        return {k: v for k, v in categories.items() if v}
     
     def optimize_imports(self) -> Dict[str, Any]:
-        """⚡ Import optimizasyonu önerileri"""
+        """🔧 Import optimizasyon önerileri"""
         
-        logger.info("⚡ Import optimizasyonu analizi...")
+        logger.info("🔧 Import optimizasyon analizi...")
         
-        optimization_results = {
+        optimizations = {
+            "has_optimizations": False,
             "unused_imports": [],
             "duplicate_imports": [],
-            "optimization_suggestions": [],
-            "total_optimizable_files": 0
+            "suggestions": []
         }
         
-        for relative_path, file_analysis in self.file_dependencies.items():
-            if "error" not in file_analysis:
-                file_optimizations = self._analyze_file_imports(file_analysis)
-                
-                if file_optimizations["has_optimizations"]:
-                    optimization_results["total_optimizable_files"] += 1
-                    
-                    optimization_results["optimization_suggestions"].append({
-                        "file": relative_path,
-                        "optimizations": file_optimizations
-                    })
+        # Her dosya için optimizasyon önerileri
+        for file_path, file_analysis in self.file_imports.items():
+            file_optimizations = self._analyze_file_import_optimizations(file_analysis)
+            
+            if file_optimizations["has_optimizations"]:
+                optimizations["has_optimizations"] = True
+                optimizations["suggestions"].append({
+                    "file": file_path,
+                    "optimizations": file_optimizations
+                })
         
-        return optimization_results
+        return optimizations
     
-    def _analyze_file_imports(self, file_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """📄 Dosya import analizi"""
+    def _analyze_file_import_optimizations(self, file_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """📄 Dosya bazında import optimizasyon analizi"""
         
         optimizations = {
             "has_optimizations": False,
@@ -602,10 +479,67 @@ class DependencyAnalyzer:
         logger.info(f"✅ Yeni requirements.txt oluşturuldu: {requirements_file}")
         
         # Dependency graph (GraphML format)
-        if self.dependency_graph.nodes():
+        if NETWORKX_AVAILABLE and self.dependency_graph.nodes():
             graph_file = self.project_root / "logs" / f"dependency_graph_{timestamp}.graphml"
             nx.write_graphml(self.dependency_graph, graph_file)
             logger.info(f"📈 Dependency graph kaydedildi: {graph_file}")
+    
+    def run_comprehensive_analysis(self) -> Dict[str, Any]:
+        """🔬 Kapsamlı bağımlılık analizi"""
+        
+        logger.info("🔬 KAPSAMLI BAĞIMLILIK ANALİZİ BAŞLIYOR...")
+        
+        analysis_start = datetime.now(timezone.utc)
+        
+        # Ana analiz
+        main_analysis = self.analyze_all_files()
+        
+        # Döngüsel bağımlılık kontrolü
+        circular_analysis = self.check_circular_dependencies()
+        
+        # Kullanılmayan import'lar
+        unused_analysis = self.detect_unused_imports()
+        
+        # Import optimizasyonları
+        optimization_analysis = self.optimize_imports()
+        
+        analysis_end = datetime.now(timezone.utc)
+        duration = (analysis_end - analysis_start).total_seconds()
+        
+        # Comprehensive sonuç
+        comprehensive_results = {
+            "timestamp": analysis_end.isoformat(),
+            "duration_seconds": duration,
+            "project_root": str(self.project_root.absolute()),
+            "analysis_summary": {
+                "total_files_analyzed": main_analysis["successful_analyses"],
+                "total_external_imports": len(self.all_external_imports),
+                "has_circular_dependencies": circular_analysis.get("has_cycles", False),
+                "total_unused_imports": unused_analysis.get("total_unused", 0),
+                "optimization_opportunities": optimization_analysis.get("has_optimizations", False)
+            },
+            "main_analysis": main_analysis,
+            "circular_dependencies": circular_analysis,
+            "unused_imports": unused_analysis,
+            "import_optimizations": optimization_analysis
+        }
+        
+        # Sonuçları kaydet
+        self.save_analysis_results(comprehensive_results)
+        
+        # Konsol özeti
+        logger.info("="*80)
+        logger.info("🔬 BAĞIMLILIK ANALİZİ RAPORU")
+        logger.info("="*80)
+        logger.info(f"📊 Analiz edilen dosya: {main_analysis['successful_analyses']}")
+        logger.info(f"📦 External import: {len(self.all_external_imports)}")
+        logger.info(f"🔄 Döngüsel bağımlılık: {'VAR' if circular_analysis.get('has_cycles', False) else 'YOK'}")
+        logger.info(f"🗑️ Kullanılmayan import: {unused_analysis.get('total_unused', 0)}")
+        logger.info(f"🔧 Optimizasyon fırsatı: {'VAR' if optimization_analysis.get('has_optimizations', False) else 'YOK'}")
+        logger.info(f"⏱️ Analiz süresi: {duration:.2f} saniye")
+        logger.info("="*80)
+        
+        return comprehensive_results
 
 
 def main():
@@ -630,100 +564,57 @@ Kullanım Örnekleri:
     parser.add_argument('--optimize-imports', action='store_true', help='Import optimizasyonu')
     parser.add_argument('--full-analysis', action='store_true', help='Kapsamlı analiz (hepsi)')
     parser.add_argument('--include-versions', action='store_true', default=True, help='Requirements.txt\'ye versiyon bilgisi ekle')
-    parser.add_argument('--project-root', default='.', help='Proje kök klasörü')
+    parser.add_argument('--project-root', default='.', help='Proje kök dizini')
     
     args = parser.parse_args()
     
-    if not any([args.analyze_all, args.generate_requirements, args.check_circular, 
-                args.optimize_imports, args.full_analysis]):
-        parser.print_help()
-        return
-    
-    # Analyzer'ı başlat
+    # Analyzer oluştur
     analyzer = DependencyAnalyzer(project_root=args.project_root)
     
     try:
-        print("🔍 PHOENIX DEPENDENCY ANALYZER")
-        print("="*80)
+        if args.full_analysis or (not any([args.analyze_all, args.generate_requirements, 
+                                          args.check_circular, args.optimize_imports])):
+            # Varsayılan: kapsamlı analiz
+            results = analyzer.run_comprehensive_analysis()
+            
+        else:
+            # Belirli analizler
+            if args.analyze_all:
+                results = analyzer.analyze_all_files()
+                logger.info(f"✅ {results['successful_analyses']} dosya analiz edildi")
+            
+            if args.check_circular:
+                circular_results = analyzer.check_circular_dependencies()
+                if circular_results.get("has_cycles"):
+                    logger.warning(f"⚠️ {circular_results['cycle_count']} döngüsel bağımlılık bulundu")
+                else:
+                    logger.info("✅ Döngüsel bağımlılık yok")
+            
+            if args.optimize_imports:
+                opt_results = analyzer.optimize_imports()
+                if opt_results.get("has_optimizations"):
+                    logger.info("🔧 Import optimizasyon fırsatları bulundu")
+                else:
+                    logger.info("✅ Import'lar optimize")
+            
+            if args.generate_requirements:
+                # İlk önce analiz yap
+                analyzer.analyze_all_files()
+                # Sonra requirements oluştur
+                req_content = analyzer.generate_requirements_txt(args.include_versions)
+                req_file = analyzer.project_root / "requirements.txt"
+                with open(req_file, 'w') as f:
+                    f.write(req_content)
+                logger.info(f"✅ Requirements.txt oluşturuldu: {req_file}")
         
-        if args.full_analysis or args.analyze_all:
-            print("📊 Proje analizi başlatılıyor...")
-            analysis_results = analyzer.analyze_project()
-            
-            print("\n📋 ANALİZ SONUÇLARI:")
-            print(f"   📄 Toplam dosya: {analysis_results['total_files']}")
-            print(f"   ✅ Başarılı analiz: {analysis_results['successful_analyses']}")
-            
-            summary = analysis_results['summary']
-            print(f"   📦 External packages: {summary['total_external_packages']}")
-            print(f"   🏠 Local modules: {summary['total_local_modules']}")
-            print(f"   📥 Toplam import: {summary['total_imports']}")
-            
-            if summary.get('most_used_externals'):
-                print(f"\n📈 EN ÇOK KULLANILAN PAKETLER:")
-                for pkg, count in summary['most_used_externals'][:10]:
-                    print(f"   📦 {pkg}: {count} dosyada kullanılıyor")
-            
-            # Sonuçları kaydet
-            analyzer.save_analysis_results(analysis_results)
+        logger.info("🎉 Bağımlılık analizi tamamlandı!")
         
-        if args.full_analysis or args.generate_requirements:
-            print("\n📋 Requirements.txt oluşturuluyor...")
-            
-            if not analyzer.external_packages:
-                # Eğer analiz henüz yapılmamışsa
-                analyzer.analyze_project()
-            
-            requirements_content = analyzer.generate_requirements_txt(args.include_versions)
-            
-            print("✅ Requirements.txt oluşturuldu!")
-            print(f"   📦 {len(analyzer.external_packages)} external package")
-            
-            # Kategorilere göre özet
-            categorized = analyzer._categorize_packages()
-            for category, packages in categorized.items():
-                if packages:
-                    print(f"   📂 {category}: {len(packages)} package")
-        
-        if args.full_analysis or args.check_circular:
-            print("\n🔄 Döngüsel bağımlılık kontrolü...")
-            
-            if not analyzer.dependency_graph.nodes():
-                analyzer.analyze_project()
-            
-            circular_analysis = analyzer.check_circular_dependencies()
-            
-            if circular_analysis.get("has_circular_dependencies"):
-                print(f"⚠️ {circular_analysis['circular_dependency_count']} döngüsel bağımlılık bulundu!")
-                
-                for i, cycle in enumerate(circular_analysis.get("cycles", [])[:5]):  # İlk 5'ini göster
-                    print(f"   🔄 Cycle {i+1}: {' -> '.join(cycle)}")
-            else:
-                print("✅ Döngüsel bağımlılık bulunamadı")
-        
-        if args.full_analysis or args.optimize_imports:
-            print("\n⚡ Import optimizasyonu analizi...")
-            
-            if not analyzer.file_dependencies:
-                analyzer.analyze_project()
-            
-            optimization_results = analyzer.optimize_imports()
-            
-            print(f"📊 {optimization_results['total_optimizable_files']} dosya optimize edilebilir")
-            
-            if optimization_results['optimization_suggestions']:
-                print("💡 Optimizasyon önerileri:")
-                for suggestion in optimization_results['optimization_suggestions'][:5]:  # İlk 5'ini göster
-                    print(f"   📄 {suggestion['file']}")
-                    if suggestion['optimizations']['duplicate_imports']:
-                        print(f"      🔄 {len(suggestion['optimizations']['duplicate_imports'])} duplicate import")
-        
-        print("\n🎉 ANALİZ TAMAMLANDI!")
-        print("📊 Detaylı sonuçlar logs/ klasöründe")
-        
+    except KeyboardInterrupt:
+        logger.info("🛑 Analiz kullanıcı tarafından durduruldu")
+        sys.exit(130)
     except Exception as e:
-        logger.error(f"❌ Analiz hatası: {e}")
-        print(f"\n❌ HATA: {e}")
+        logger.error(f"❌ Beklenmedik hata: {e}")
+        traceback.print_exc()
         sys.exit(1)
 
 
