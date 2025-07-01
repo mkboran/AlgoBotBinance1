@@ -60,7 +60,7 @@ from utils.config import settings
 from utils.logger import logger
 from strategies.momentum_optimized import EnhancedMomentumStrategy
 from utils.portfolio import Portfolio
-from backtest_runner import MomentumBacktester
+from other.backtest_runner import MomentumBacktester
 
 # Advanced optimization imports
 try:

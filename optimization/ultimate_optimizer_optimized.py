@@ -49,7 +49,7 @@ except ImportError:
     STRATEGY_AVAILABLE = False
 
 try:
-    from backtest_runner import MomentumBacktester  
+    from other.backtest_runner import MomentumBacktester  
     BACKTESTER_AVAILABLE = True
 except ImportError:
     BACKTESTER_AVAILABLE = False

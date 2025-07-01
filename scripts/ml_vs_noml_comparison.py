@@ -30,11 +30,11 @@ from utils.portfolio import Portfolio
 from utils.logger import logger
 from strategies.momentum_optimized import EnhancedMomentumStrategy
 try:
-    from backtest_runner import MomentumBacktester
+    from other.backtest_runner import MomentumBacktester
 except ImportError:
     # Alternative import path if needed
     try:
-        import backtest_runner
+        import other.backtest_runner as backtest_runner
         MomentumBacktester = backtest_runner.MomentumBacktester
     except ImportError:
         print("⚠️ MomentumBacktester not found. Check backtest_runner.py path.")

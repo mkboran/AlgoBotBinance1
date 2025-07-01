@@ -33,7 +33,7 @@ warnings.filterwarnings('ignore')
 from utils.config import settings
 from utils.portfolio import Portfolio
 from utils.logger import logger
-from backtest_runner import MomentumBacktester
+from other.backtest_runner import MomentumBacktester
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
