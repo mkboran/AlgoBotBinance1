@@ -1,8 +1,30 @@
 #!/usr/bin/env python3
 """
-MANUAL ULTIMATE PARAMETER UPDATE
-Auto-update failed, manuel olarak ultimate optimization sonuçlarını uygulayacağız
+⚠️ LEGACY MANUAL PARAMETER UPDATE SCRIPT - ARCHIVED
+🚨 GÜVENLİK UYARISI: Bu script ARTIK KULLANILMAMALIDIR!
+
+❌ NEDEN ARŞİVLENDİ:
+- Modern JSON tabanlı parametre yönetimi ile çakışıyor
+- Kod bütünlüğünü bozma riski taşıyor
+- main.py merkezli akışa uygun değil
+- Hata yapma olasılığı yüksek
+
+✅ DOĞRU KULLANIM:
+python main.py optimize --strategy momentum --trials 5000
+python main.py live --strategy momentum --capital 1000
+
+📚 REFERANS:
+- docs/PROJE_GELISTIRME_YOL_HARITASI.md
+- utils/json_parameter_system.py
+- main.py (tek doğru komuta merkezi)
+
+🔄 ARŞİV TARİHİ: 2025-01-02
+📝 ARŞİV NEDENİ: Modern sistem entegrasyonu için güvenlik
 """
+
+# Orijinal script içeriği buraya taşındı (güvenlik için)
+# Bu dosya sadece referans amaçlı tutulmuştur
+# KULLANMAYIN - SİSTEMİ BOZABİLİR
 
 import json
 import re
@@ -10,7 +32,11 @@ from pathlib import Path
 from datetime import datetime
 
 def apply_ultimate_optimization_results():
-    """Ultimate optimization sonuçlarını manuel olarak uygula"""
+    """⚠️ LEGACY: Ultimate optimization sonuçlarını manuel olarak uygula"""
+    
+    print("🚨 GÜVENLİK UYARISI: Bu script ARTIK KULLANILMAMALIDIR!")
+    print("✅ Doğru kullanım: python main.py optimize --strategy momentum --trials 5000")
+    print("📚 Detaylar için: docs/PROJE_GELISTIRME_YOL_HARITASI.md")
     
     # Find latest ultimate optimization result
     results_dir = Path("optimization_results")
@@ -163,7 +189,11 @@ def validate_updated_strategy():
         return True  # Assume OK if can't validate
 
 if __name__ == "__main__":
-    print("🚀 MANUAL ULTIMATE PARAMETER UPDATE")
+    print("🚨 LEGACY MANUAL PARAMETER UPDATE SCRIPT")
+    print("=" * 50)
+    print("⚠️  GÜVENLİK UYARISI: Bu script ARTIK KULLANILMAMALIDIR!")
+    print("✅ Doğru kullanım: python main.py optimize --strategy momentum --trials 5000")
+    print("📚 Detaylar için: docs/PROJE_GELISTIRME_YOL_HARITASI.md")
     print("=" * 50)
     
     # Apply ultimate optimization results
@@ -179,4 +209,4 @@ if __name__ == "__main__":
         else:
             print("\n❌ Syntax validation failed - check strategy file")
     else:
-        print("\n❌ Parameter update failed")
+        print("\n❌ Parameter update failed") 

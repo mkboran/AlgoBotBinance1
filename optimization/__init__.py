@@ -20,5 +20,5 @@ if str(project_root) not in sys.path:
 __version__ = "2.0.0"
 __package_name__ = "optimization"
 
-# Objective function module
-from .objective_fixed import run_objective, suggest_parameters
+# Objective function module - removed as module doesn't exist
+# from .objective_fixed import run_objective, suggest_parameters

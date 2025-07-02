@@ -42,7 +42,7 @@ from utils.config import settings
 from utils.logger import logger
 
 # System integration imports
-from json_parameter_system import JSONParameterManager, StrategyParameters
+from json_parameter_system import JSONParameterManager
 from optimization.master_optimizer import MasterOptimizer, OptimizationConfig, OptimizationResult
 
 
