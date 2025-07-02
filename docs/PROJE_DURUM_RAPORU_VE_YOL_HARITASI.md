@@ -256,48 +256,6 @@ ULTIMATE COMMAND CENTER
 - **Dynamic Allocation**: Dinamik tahsis
 - **Performance Tracking**: Performans takibi
 
----
-
-## 📊 PERFORMANS METRİKLERİ
-
-### 🎯 **BACKTEST SONUÇLARI (2024)**
-
-| Strateji | Return % | Sharpe | Max DD % | Win Rate % | Profit Factor |
-|----------|----------|--------|----------|------------|---------------|
-| **Momentum** | **26.8%** | **2.1** | **8.5%** | **68%** | **2.3** |
-| Bollinger RSI | 18.2% | 1.8 | 12.3% | 62% | 1.9 |
-| RSI ML | 22.1% | 1.9 | 10.1% | 65% | 2.1 |
-| MACD ML | 19.8% | 1.7 | 11.2% | 61% | 1.8 |
-| Volume Profile | 15.6% | 1.5 | 14.8% | 58% | 1.6 |
-
-### 🚀 **PORTFÖY PERFORMANSI**
-
-- **Multi-Strategy Portfolio**: 31.2% yıllık return
-- **Risk-Adjusted Return**: 2.4 Sharpe ratio
-- **Maximum Drawdown**: 7.8%
-- **Win Rate**: 71%
-- **Profit Factor**: 2.1
-- **Calmar Ratio**: 4.0
-- **Sortino Ratio**: 3.2
-
-### 🧠 **AI ENHANCEMENT SONUÇLARI**
-
-- **ML Prediction Accuracy**: 73%
-- **Dynamic Exit Improvement**: +25% profit boost
-- **Kelly Sizing Optimization**: +35% capital efficiency
-- **Global Intelligence**: -20% risk reduction
-- **Adaptive Evolution**: +15% performance improvement
-
-### ⚡ **SİSTEM PERFORMANSI**
-
-- **Decision Time**: <50ms per strategy
-- **Backtest Speed**: 10,000 trades/second
-- **Memory Usage**: <512MB per strategy
-- **CPU Utilization**: <30% average
-- **Network Latency**: <100ms API calls
-
----
-
 ## 🔧 TEKNİK DETAYLAR
 
 ### 📊 **KOD KALİTESİ METRİKLERİ**
