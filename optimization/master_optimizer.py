@@ -40,7 +40,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 from utils.config import settings
 from utils.logger import logger
 from parameter_spaces import get_parameter_space
-from optimization.objective_fixed import run_objective
 
 # Logging setup
 logging.basicConfig(
@@ -190,7 +189,7 @@ class MasterOptimizer:
         # Objective function wrapper
         def objective_wrapper(trial):
             try:
-                return run_objective(
+                return get_parameter_space(
                     trial=trial,
                     strategy_name=strategy_name,
                     data_file=self.data_file,
@@ -245,7 +244,7 @@ class MasterOptimizer:
             # Window-specific objective function
             def window_objective(trial):
                 try:
-                    return run_objective(
+                    return get_parameter_space(
                         trial=trial,
                         strategy_name=strategy_name,
                         data_file=self.data_file,
@@ -410,7 +409,7 @@ class MasterOptimizer:
             mock_trial = MockTrial(parameters)
             
             # Run validation
-            validation_score = run_objective(
+            validation_score = get_parameter_space(
                 trial=mock_trial,
                 strategy_name=strategy_name,
                 data_file=self.data_file,
