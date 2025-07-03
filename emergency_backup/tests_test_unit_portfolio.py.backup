@@ -36,11 +36,11 @@ class TestPortfolio:
             portfolio = Portfolio(initial_capital_usdt=capital)
             
             assert portfolio.initial_capital_usdt == capital
-            assert portfolio.available_usdt == capital
+            assert portfolio.current_balance_usdt == capital
             assert len(portfolio.positions) == 0
-            assert len(portfolio.closed_trades) == 0
-            assert len(portfolio.closed_trades) == 0
-            assert portfolio.cumulative_pnl == 0.0
+            assert len(portfolio.closed_positions) == 0
+            assert portfolio.total_trades == 0
+            assert portfolio.total_profit_usdt == 0.0
     
     @pytest.mark.unit
     def test_portfolio_available_balance(self):
@@ -116,7 +116,7 @@ class TestPortfolio:
             
             # Pozisyon boyutu quality score'a göre artmalı
             assert position_size > 0
-            assert position_size <= portfolio.available_usdt * 0.25  # Max %25
+            assert position_size <= portfolio.current_balance_usdt * 0.25  # Max %25
     
     @pytest.mark.unit
     def test_portfolio_performance_multiplier(self):
@@ -128,9 +128,9 @@ class TestPortfolio:
         assert multiplier == 1.0
         
         # Kârlı trade ekle
-        len(portfolio.closed_trades) = 10
+        portfolio.total_trades = 10
         portfolio.winning_trades = 7
-        portfolio.cumulative_pnl = 500.0
+        portfolio.total_profit_usdt = 500.0
         
         # Performans çarpanı artmalı
         multiplier = portfolio.get_portfolio_performance_multiplier()
@@ -165,7 +165,7 @@ class TestPortfolio:
         # Portföy güncellenmeli
         assert len(portfolio.positions) == 1
         assert portfolio.get_available_usdt() == 9500.0  # 10000 - 500
-        assert len(portfolio.closed_trades) == 1
+        assert portfolio.total_trades == 1
     
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -199,11 +199,11 @@ class TestPortfolio:
         
         # Pozisyon kapatılmalı
         assert len(portfolio.positions) == 0
-        assert len(portfolio.closed_trades) == 1
+        assert len(portfolio.closed_positions) == 1
         
         # Kâr hesaplanmalı
         expected_profit = (sell_price - current_price) * position.quantity_btc
-        assert abs(portfolio.cumulative_pnl - expected_profit) < 0.01
+        assert abs(portfolio.total_profit_usdt - expected_profit) < 0.01
     
     @pytest.mark.unit
     def test_position_performance_metrics(self):
@@ -296,8 +296,8 @@ class TestPortfolio:
         # Gerekli alanlar olmalı
         required_fields = [
             'total_trades', 'winning_trades', 'losing_trades',
-            'cumulative_pnl', 'total_return_pct', 'win_rate_pct',
-            'sharpe_ratio', 'max_drawdown_pct', 'available_usdt',
+            'total_profit_usdt', 'total_return_pct', 'win_rate_pct',
+            'sharpe_ratio', 'max_drawdown_pct', 'current_balance_usdt',
             'total_portfolio_value_usdt'
         ]
         

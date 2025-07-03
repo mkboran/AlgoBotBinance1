@@ -327,9 +327,9 @@ class TestSystemIntegration:
                 
                 assert success is True
                 assert len(sample_portfolio.positions) == 0
-                assert len(sample_portfolio.closed_trades) == 1
-                assert sample_len(portfolio.closed_trades) == 1
-                assert sample_portfolio.cumulative_pnl > 0
+                assert len(sample_portfolio.closed_positions) == 1
+                assert sample_portfolio.total_trades == 1
+                assert sample_portfolio.total_profit_usdt > 0
     
     @pytest.mark.integration
     @pytest.mark.asyncio

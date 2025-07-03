@@ -256,7 +256,7 @@ class PhoenixTradingSystem:
             
             # Initialize portfolio
             initial_capital = config.get("capital", 1000.0)
-            self.portfolio = Portfolio(initial_capital_usdt=initial_capital)
+            self.portfolio = Portfolio(initial_balance=initial_capital)
             self.logger.info(f"✅ Portfolio initialized: ${initial_capital:,.2f}")
             
             # Initialize validator

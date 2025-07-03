@@ -1,4 +1,7 @@
 {
     "python-envs.pythonProjects": [],
-    "python.defaultInterpreterPath": "C:/Projects/AlgoBotBinance/venv/Scripts/python.exe"
+    "python.defaultInterpreterPath": "C:/Projects/AlgoBotBinance/venv/Scripts/python.exe",
+    "python.analysis.extraPaths": [
+        "./utils"
+    ]
 }
