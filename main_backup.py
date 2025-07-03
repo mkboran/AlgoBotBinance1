@@ -72,12 +72,9 @@ try:
     
     # Evolution system (FAZ 3)
     from utils.adaptive_parameter_evolution import AdaptiveParameterEvolution, integrate_adaptive_parameter_evolution, EvolutionConfig
-except Exception as e:
-    logger = logging.getLogger("phoenix.main")
-    logger.error(f"❌ Import error in core system imports: {e}")
     
-# Backtesting system (FAZ 4)
-try:
+    # Backtesting system (FAZ 4)
+    try:
     from backtesting.multi_strategy_backtester import BacktestResult, BacktestConfiguration, BacktestMode
     ADVANCED_BACKTEST_AVAILABLE = True
 except ImportError as e:

@@ -28,7 +28,6 @@ HEDGE FUND LEVEL IMPLEMENTATION - PRODUCTION READY
 """
 
 import asyncio
-from typing import Optional, Any, Dict
 import argparse
 import sys
 import os
@@ -72,30 +71,9 @@ try:
     
     # Evolution system (FAZ 3)
     from utils.adaptive_parameter_evolution import AdaptiveParameterEvolution, integrate_adaptive_parameter_evolution, EvolutionConfig
-except Exception as e:
-    logger = logging.getLogger("phoenix.main")
-    logger.error(f"❌ Import error in core system imports: {e}")
     
-# Backtesting system (FAZ 4)
-try:
-    from backtesting.multi_strategy_backtester import BacktestResult, BacktestConfiguration, BacktestMode
-    ADVANCED_BACKTEST_AVAILABLE = True
-except ImportError as e:
-    print("⚠️ Advanced backtest not available, using simple mode")
-    ADVANCED_BACKTEST_AVAILABLE = False
-    
-    # Dummy classes for fallback
-    class BacktestResult:
-        def __init__(self, **kwargs):
-            pass
-    
-    class BacktestConfiguration:
-        def __init__(self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-    
-    class BacktestMode:
-        SINGLE_STRATEGY = "single"
+    # Backtesting system (FAZ 4)
+    from backtesting.multi_strategy_backtester import MultiStrategyBacktester, BacktestConfiguration, BacktestMode, BacktestResult
     
     # Optimization system
     from optimization.master_optimizer import MasterOptimizer, OptimizationConfig, OptimizationResult

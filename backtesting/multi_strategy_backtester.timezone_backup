@@ -1,3 +1,4 @@
+from typing import List, Dict, Tuple, Optional, Any
 #!/usr/bin/env python3
 """
 🧪 ADVANCED MULTI-STRATEGY BACKTESTING SYSTEM v2.0 - FULL 1600+ LINES
@@ -414,7 +415,7 @@ class MultiStrategyBacktester:
             logger.info(f"📊 Data prepared: {len(prepared_data)} candles")
             
             # Initialize portfolio for backtest
-            portfolio = Portfolio(initial_balance=config.initial_capital)
+            portfolio = Portfolio(initial_capital_usdt=config.initial_capital)
             
             # Initialize strategy instance
             strategy_info = self.strategies[strategy_name]
