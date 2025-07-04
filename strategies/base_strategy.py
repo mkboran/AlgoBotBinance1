@@ -294,6 +294,8 @@ class BaseStrategy(ABC):
         
         # Strategy-specific parameters storage
         self.parameters = kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
         
         self.logger.info(f"✅ {self.strategy_name} Enhanced Base Strategy v2.0 initialized")
         self.logger.info(f"🔥 FAZ 2 Systems: Dynamic Exit={self.dynamic_exit_enabled}, "

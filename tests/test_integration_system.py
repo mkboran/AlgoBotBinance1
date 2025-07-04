@@ -15,6 +15,8 @@ HEDGE FUND LEVEL INTEGRATION TESTING
 """
 
 import pytest
+from strategies.momentum_optimized import EnhancedMomentumStrategy
+from strategies.base_strategy import TradingSignal, SignalType
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone, timedelta
@@ -29,7 +31,7 @@ from utils.adaptive_parameter_evolution import AdaptiveParameterEvolution
 from optimization.master_optimizer import MasterOptimizer, OptimizationConfig
 from backtesting.multi_strategy_backtester import MultiStrategyBacktester, BacktestConfiguration, BacktestMode
 from json_parameter_system import JSONParameterManager
-from strategies.momentum_optimized import EnhancedMomentumStrategy
+from strategies.base_strategy import TradingSignal, SignalType
 
 
 class TestSystemIntegration:
@@ -66,8 +68,8 @@ class TestSystemIntegration:
         )
         
         success = coordinator.register_strategy(
-            name="momentum",
-            instance=momentum_strategy,
+            strategy_name="momentum",
+            strategy_instance=momentum_strategy,
             initial_weight=0.5
         )
         
@@ -228,8 +230,8 @@ class TestSystemIntegration:
         )
         
         coordinator.register_strategy(
-            name="momentum",
-            instance=momentum_strategy,
+            strategy_name="momentum",
+            strategy_instance=momentum_strategy,
             initial_weight=1.0
         )
         
@@ -346,8 +348,8 @@ class TestSystemIntegration:
         
         for name, strategy in strategies.items():
             coordinator.register_strategy(
-                name=name,
-                instance=strategy,
+                strategy_name=name,
+                strategy_instance=strategy,
                 initial_weight=0.5
             )
         

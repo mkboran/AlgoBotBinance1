@@ -42,6 +42,8 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 import warnings
 import time
 from dataclasses import dataclass, asdict
+from optimization.master_optimizer import MasterOptimizer, OptimizationConfig, OptimizationResult
+from json_parameter_system import JSONParameterManager
 
 # Suppress warnings for clean output
 warnings.filterwarnings('ignore')
@@ -98,12 +100,12 @@ except ImportError as e:
         SINGLE_STRATEGY = "single"
     
     # Optimization system
-    from optimization.master_optimizer import MasterOptimizer, OptimizationConfig, OptimizationResult
     
     # Parameter management
     from json_parameter_system import JSONParameterManager
     
     # Validation system
+    from json_parameter_system import JSONParameterManager
     from scripts.validate_system import PhoenixSystemValidator
     
     CORE_IMPORTS_SUCCESS = True

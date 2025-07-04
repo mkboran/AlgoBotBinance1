@@ -14,6 +14,7 @@ HEDGE FUND LEVEL UNIT TESTING
 """
 
 import pytest
+from unittest.mock import MagicMock, patch, AsyncMock
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone, timedelta
@@ -128,7 +129,9 @@ class TestPortfolio:
         assert multiplier == 1.0
         
         # Kârlı trade ekle
-        len(portfolio.closed_trades) = 10
+        # Mock trade'ler oluşturarak kapalı işlemleri simüle et
+        # MagicMock, test sırasında gerçek bir nesne gibi davranabilen sahte bir nesnedir.
+        portfolio.closed_trades = [MagicMock()] * 10
         portfolio.winning_trades = 7
         portfolio.cumulative_pnl = 500.0
         

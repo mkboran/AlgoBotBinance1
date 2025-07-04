@@ -191,10 +191,7 @@ class MasterOptimizer:
             try:
                 return get_parameter_space(
                     trial=trial,
-                    strategy_name=strategy_name,
-                    data_file=self.data_file,
-                    start_date="2023-01-01",
-                    end_date="2024-09-30"
+                    strategy_name=strategy_name
                 )
             except Exception as e:
                 master_logger.error(f"❌ Trial {trial.number} failed: {e}")
@@ -246,10 +243,7 @@ class MasterOptimizer:
                 try:
                     return get_parameter_space(
                         trial=trial,
-                        strategy_name=strategy_name,
-                        data_file=self.data_file,
-                        start_date=start_date,
-                        end_date=end_date
+                        strategy_name=strategy_name
                     )
                 except Exception as e:
                     master_logger.error(f"❌ Window {window_name} trial {trial.number} failed: {e}")

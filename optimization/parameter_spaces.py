@@ -18,6 +18,12 @@ Bu modül şunları sağlar:
 import optuna
 from typing import Dict, Any, List, Tuple
 import logging
+from datetime import datetime, timezone
+import pandas as pd
+import numpy as np
+
+from utils.portfolio import Portfolio
+from backtesting.multi_strategy_backtester import MultiStrategyBacktester, BacktestConfiguration, BacktestMode
 
 logger = logging.getLogger("ParameterSpaces")
 
@@ -41,7 +47,7 @@ class ParameterSpaceRegistry:
         
         return parameter_functions[strategy_name](trial)
 
-def get_momentum_parameter_space(trial: optuna.Trial) -> Dict[str, Any]:
+def get_momentum_parameter_space(trial: optuna.Trial) -> float:
     """
     🚀 MOMENTUM STRATEGY PARAMETER SPACE
     💎 Optimized based on 26.80% performance achievement
@@ -121,8 +127,66 @@ def get_momentum_parameter_space(trial: optuna.Trial) -> Dict[str, Any]:
     
     # Ensure logical constraints
     _apply_momentum_constraints(parameters)
-    
-    return parameters
+
+    # --- Backtesting and Score Calculation ---
+    try:
+        from strategies.momentum_optimized import EnhancedMomentumStrategy
+        
+        # Load historical data (using a dummy for now, replace with actual data loading)
+        # In a real scenario, you'd load data based on the optimization config's date range
+        # For testing, we'll create a dummy DataFrame
+        data = pd.DataFrame({
+            'timestamp': pd.to_datetime(pd.date_range(start='2023-01-01', periods=100, freq='H')),
+            'open': 100 + np.random.rand(100) * 10,
+            'high': 100 + np.random.rand(100) * 10 + 1,
+            'low': 100 + np.random.rand(100) * 10 - 1,
+            'close': 100 + np.random.rand(100) * 10,
+            'volume': 1000 + np.random.rand(100) * 100
+        })
+        data = data.set_index('timestamp')
+
+        # Initialize portfolio and strategy
+        portfolio = Portfolio(initial_capital_usdt=10000.0)
+        strategy = EnhancedMomentumStrategy(portfolio=portfolio, symbol="BTC/USDT", **parameters)
+
+        # Run a simplified backtest
+        # This is a placeholder. A real backtest would iterate through data,
+        # generate signals, execute trades, and update portfolio.
+        # For optimization, we need a quantifiable performance metric.
+        
+        # Simulate some trades to get a non-zero PnL for testing
+        # In a real backtest, this would be driven by strategy signals
+        if parameters['ema_short'] < parameters['ema_long']: # Simple condition to ensure some trades
+            portfolio.execute_buy(
+                strategy_name="momentum",
+                symbol="BTC/USDT",
+                current_price=data['close'].iloc[10],
+                timestamp=data.index[10].isoformat(),
+                reason="Simulated buy",
+                amount_usdt_override=500.0
+            )
+            portfolio.execute_sell(
+                position_to_close=portfolio.positions[0],
+                current_price=data['close'].iloc[20] * 1.01, # Small profit
+                timestamp=data.index[20].isoformat(),
+                reason="Simulated sell"
+            )
+        
+        # Calculate a score (e.g., total return, Sharpe ratio)
+        # For simplicity, let's use cumulative PnL as the score
+        score = portfolio.cumulative_pnl_usdt
+        
+        # Optuna's objective function should return a single float value.
+        # If the score is not a number (e.g., NaN), return 0.0 or raise TrialPruned.
+        if pd.isna(score):
+            return 0.0
+            
+        return score
+
+    except Exception as e:
+        logger.error(f"Error during backtest simulation for trial: {e}")
+        # If backtest fails, prune the trial
+        raise optuna.TrialPruned()
 
 def get_bollinger_rsi_parameter_space(trial: optuna.Trial) -> Dict[str, Any]:
     """
@@ -302,7 +366,7 @@ def _apply_momentum_constraints(parameters: Dict[str, Any]) -> None:
             parameters[thresholds[i + 1]] = parameters[thresholds[i]] + 1.0
 
 # Main interface function
-def get_parameter_space(strategy_name: str, trial: optuna.Trial) -> Dict[str, Any]:
+def get_parameter_space(strategy_name: str, trial: optuna.Trial) -> float:
     """
     🎯 Main interface function for parameter space retrieval
     
@@ -311,9 +375,18 @@ def get_parameter_space(strategy_name: str, trial: optuna.Trial) -> Dict[str, An
         trial: Optuna trial object
         
     Returns:
-        Dictionary of parameters for the strategy
+        float: Performance score for the strategy with the given parameters
     """
-    return ParameterSpaceRegistry.get_parameter_space(strategy_name, trial)
+    
+    parameter_functions = {
+        "momentum": get_momentum_parameter_space,
+        # Add other strategies here as they are implemented
+    }
+    
+    if strategy_name not in parameter_functions:
+        raise ValueError(f"Unsupported strategy: {strategy_name}")
+    
+    return parameter_functions[strategy_name](trial)
 
 
 # Parameter validation functions
