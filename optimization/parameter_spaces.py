@@ -74,7 +74,7 @@ class ParameterSpaceRegistry:
         
         return parameter_functions[strategy_name](trial)
 
-async def get_momentum_parameter_space(trial: optuna.Trial) -> float:
+def get_momentum_parameter_space(trial: optuna.Trial) -> float:
     """
     🚀 MOMENTUM STRATEGY PARAMETER SPACE
     💎 Optimized based on 26.80% performance achievement
