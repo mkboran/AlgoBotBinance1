@@ -234,6 +234,10 @@ class StrategyCoordinator:
             'resolved_conflicts': 0,
             'performance_improvements': 0
         }
+
+        # AI Integration Config
+        self.ai_sentiment_modifier = kwargs.get('ai_sentiment_modifier', 0.5) # Default: reduce size by 50% on negative sentiment
+        self.ai_sentiment_threshold = kwargs.get('ai_sentiment_threshold', -0.3) # Sentiment score below this triggers modifier
         
         # ==================================================================================
         # FAZ 2.5: PERFORMANCE ATTRIBUTION INTEGRATION - NEW!
@@ -298,12 +302,13 @@ class StrategyCoordinator:
     # FAZ 2.1: SIGNAL CONSENSUS METHODS - COMPLETE
     # ==================================================================================
 
-    async def analyze_signal_consensus(self, current_signals: Dict[str, Any]) -> SignalConsensus:
+    async def analyze_signal_consensus(self, current_signals: Dict[str, Any], ai_sentiment_score: Optional[float] = None) -> SignalConsensus:
         """
         🎼 Analyze signal consensus across all strategies
         
         Args:
             current_signals: Dictionary of {strategy_name: signal_data}
+            ai_sentiment_score: Optional sentiment score from AI provider (-1.0 to 1.0).
             
         Returns:
             SignalConsensus: Consensus analysis result
@@ -318,7 +323,7 @@ class StrategyCoordinator:
                 })
             
             # Analyze consensus
-            consensus = await self._calculate_consensus(current_signals)
+            consensus = await self._calculate_consensus(current_signals, ai_sentiment_score)
             
             # Handle conflicts if any
             if consensus.consensus_strength < self.consensus_config['strong_consensus_threshold']:
@@ -346,7 +351,7 @@ class StrategyCoordinator:
                 confidence_score=0.0
             )
 
-    async def _calculate_consensus(self, signals: Dict[str, Any]) -> SignalConsensus:
+    async def _calculate_consensus(self, signals: Dict[str, Any], ai_sentiment_score: Optional[float] = None) -> SignalConsensus:
         """Calculate signal consensus from raw signals"""
         try:
             if not signals:
@@ -358,6 +363,12 @@ class StrategyCoordinator:
                     confidence_score=0.0
                 )
             
+            # AI Sentiment Modifier
+            ai_modifier = 1.0
+            if ai_sentiment_score is not None and ai_sentiment_score < self.ai_sentiment_threshold:
+                ai_modifier = self.ai_sentiment_modifier
+                self.logger.info(f"🤖 AI Sentiment is negative ({ai_sentiment_score:.2f}). Applying risk modifier: {ai_modifier:.2f}")
+
             # Weight signals by strategy performance and confidence
             weighted_signals = {}
             total_weight = 0.0
@@ -373,6 +384,11 @@ class StrategyCoordinator:
                     allocation_weight = allocation.target_weight
                     
                     combined_weight = performance_weight * confidence_weight * allocation_weight
+                    
+                    # Apply AI modifier to BUY signals if sentiment is negative
+                    if signal_data.get('action') in [SignalType.BUY, SignalType.STRONG_BUY]:
+                        combined_weight *= ai_modifier
+
                     weighted_signals[strategy_name] = {
                         'signal': signal_data.get('action', SignalType.HOLD),
                         'weight': combined_weight,

@@ -208,6 +208,7 @@ class PhoenixTradingSystem:
         self.optimizer: Optional[MasterOptimizer] = None
         self.validator: Optional[PhoenixSystemValidator] = None
         self.data_fetcher: Optional[BinanceFetcher] = None
+        self.ai_provider: Optional[AISignalProvider] = None
         
         # Parameter management
         self.json_manager = JSONParameterManager()
@@ -311,8 +312,11 @@ class PhoenixTradingSystem:
             self.logger.info(f"✅ Data fetcher initialized for {symbol}")
             
             # Initialize strategies
-            strategy_name = config.get("strategy", "momentum")
-            strategies = await self._initialize_strategies([strategy_name], config)
+            strategy_to_run = config.get("strategy", "momentum")
+            strategy_names = list(self.strategy_registry.keys()) if strategy_to_run == 'all' else [strategy_to_run]
+            
+            self.logger.info(f"Initializing strategies: {', '.join(strategy_names)}")
+            strategies = await self._initialize_strategies(strategy_names, config)
             
             if not strategies:
                 self.logger.error("❌ No strategies initialized")
@@ -327,17 +331,27 @@ class PhoenixTradingSystem:
             self.logger.info("✅ Strategy coordinator initialized")
             
             # Initialize adaptive evolution system
-            evolution_config = EvolutionConfig(
-                consecutive_loss_trigger=config.get("consecutive_loss_trigger", 5),
-                profit_factor_threshold=config.get("profit_factor_threshold", 1.0),
-                min_improvement_pct=config.get("min_improvement_pct", 5.0)
-            )
-            
-            self.evolution_system = integrate_adaptive_parameter_evolution(
-                strategy_coordinator_instance=self.strategy_coordinator,
-                evolution_config=evolution_config
-            )
-            self.logger.info("✅ Adaptive evolution system initialized")
+            if settings.ENABLE_ADAPTIVE_EVOLUTION:
+                evolution_config = EvolutionConfig(
+                    consecutive_loss_trigger=config.get("consecutive_loss_trigger", 5),
+                    profit_factor_threshold=config.get("profit_factor_threshold", 1.0),
+                    min_improvement_pct=config.get("min_improvement_pct", 5.0)
+                )
+                
+                self.evolution_system = integrate_adaptive_parameter_evolution(
+                    strategy_coordinator_instance=self.strategy_coordinator,
+                    evolution_config=evolution_config
+                )
+                self.logger.info("✅ Adaptive evolution system initialized")
+
+            # Initialize AI Signal Provider
+            if settings.ENABLE_AI_SIGNAL_PROVIDER:
+                try:
+                    from utils.ai_signal_provider import AISignalProvider
+                    self.ai_provider = AISignalProvider(api_key=settings.openai_api_key_str)
+                    self.logger.info("✅ AI Signal Provider initialized")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ Could not initialize AI Signal Provider: {e}")
             
             # Configure emergency brake
             self.emergency_config = EmergencyBrakeConfig(
@@ -547,10 +561,30 @@ class PhoenixTradingSystem:
                             break
                     
                     # ==================================================================================
-                    # STEP 3: STRATEGY COORDINATION
+                    # STEP 3: AI SENTIMENT ANALYSIS (Optional)
+                    # ==================================================================================
+                    ai_sentiment_score = None
+                    if self.ai_provider:
+                        # In a real scenario, you would fetch news/social media data here
+                        # For now, we'll use a placeholder
+                        market_summary = f"Current BTC price is {market_data['close'].iloc[-1]:,.2f}"
+                        ta_summary = f"RSI is {market_data.ta.rsi().iloc[-1]:.2f}, MACD histogram is {market_data.ta.macd().iloc[-1, 1]:.4f}"
+                        
+                        try:
+                            signal, confidence, reason = self.ai_provider.get_trade_signal_suggestion(market_summary, ta_summary)
+                            # Convert signal to a score: BUY=1, SELL=-1, HOLD=0
+                            if signal == 'BUY': ai_sentiment_score = confidence
+                            elif signal == 'SELL': ai_sentiment_score = -confidence
+                            else: ai_sentiment_score = 0.0
+                            self.logger.info(f"🤖 AI Provider Suggestion: {signal} (Confidence: {confidence:.2f}), Score: {ai_sentiment_score:.2f}")
+                        except Exception as ai_error:
+                            self.logger.warning(f"⚠️ AI Provider failed: {ai_error}")
+
+                    # ==================================================================================
+                    # STEP 4: STRATEGY COORDINATION
                     # ==================================================================================
                     
-                    coordination_results = await self.strategy_coordinator.coordinate_strategies(market_data)
+                    coordination_results = await self.strategy_coordinator.coordinate_strategies(market_data, ai_sentiment_score=ai_sentiment_score)
                     
                     if coordination_results.get("success"):
                         actions_taken = coordination_results.get("actions_taken", [])
@@ -563,14 +597,16 @@ class PhoenixTradingSystem:
                     # ==================================================================================
                     
                     time_since_evolution = datetime.now(timezone.utc) - last_evolution_check
-                    if time_since_evolution.total_seconds() >= 3600:  # 1 hour
+                    if self.evolution_system and time_since_evolution.total_seconds() >= 3600:  # 1 hour
                         self.logger.info("🧬 Running adaptive parameter evolution check...")
                         
-                        evolution_results = await self.evolution_system.monitor_strategies()
+                        evolution_results = await self.evolution_system.monitor_and_evolve()
                         
-                        if evolution_results.get("evolution_recommended"):
-                            recommended_count = len(evolution_results["evolution_recommended"])
-                            self.logger.info(f"🎯 Evolution recommended for {recommended_count} strategies")
+                        if evolution_results and evolution_results.get("evolution_triggered"): 
+                            evolved_strategy = evolution_results.get("strategy_name", "N/A")
+                            self.logger.info(f"🎯 Evolution triggered and completed for strategy: {evolved_strategy}")
+                        else:
+                            self.logger.info("No evolution required for any strategy at this time.")
                         
                         last_evolution_check = datetime.now(timezone.utc)
                     

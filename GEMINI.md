@@ -122,3 +122,27 @@ Projenin mevcut durumunu ve potansiyelini göz önünde bulundurarak aşağıdak
 1.  **Gereksiz Dosyaların Temizlenmesi:** Proje olgunlaştıkça, artık kullanılmayan veya eskiyen dosyaların (`archive` klasörü gibi) periyodik olarak gözden geçirilip temizlenmesi.
 2.  **Kod Formatlama ve Linting:** `black` ve `flake8` gibi araçların bir pre-commit hook'u olarak eklenerek kod kalitesinin sürekli olarak yüksek tutulması.
 3.  **Dokümantasyonun Güncellenmesi:** Eklenen her yeni özellik veya strateji için `docs/` klasöründeki dokümanların güncellenmesi.
+
+---
+
+## 5. Yapılacaklar ve Komut Günlüğü (Aksiyon Planı)
+
+Bu bölüm, geliştirme sürecinde atılan adımları, çalıştırılan komutları ve tamamlanan görevleri takip etmek için kullanılır.
+
+### Aşama 1: ML Temelinin Atılması
+
+*   **Adım 1: Eğitim Verisi Oluşturma Script'i**
+    *   **Durum:** ✅ Tamamlandı (Claude tarafından oluşturuldu, Gemini tarafından incelendi ve onaylandı).
+    *   **Script:** `scripts/generate_training_data.py`
+    *   **Örnek Çalıştırma Komutu:**
+        ```bash
+        python scripts/generate_training_data.py --data-path historical_data/BTCUSDT_1h_2023_2024.csv --output-path ml_data/momentum_training_data.csv --target-horizon 24 --target-threshold 0.02
+        ```
+
+*   **Adım 2: Model Eğitme Script'i**
+    *   **Durum:** ✅ Tamamlandı (Claude tarafından oluşturuldu, Gemini tarafından incelendi ve onaylandı).
+    *   **Script:** `scripts/train_models.py`
+    *   **Örnek Çalıştırma Komutu:**
+        ```bash
+        python scripts/train_models.py --data-path ml_data/momentum_training_data.csv --model-output-path ml_models/momentum_model.pkl --model-type xgboost
+        ```
