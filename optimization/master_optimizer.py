@@ -189,10 +189,10 @@ class MasterOptimizer:
         # Objective function wrapper
         def objective_wrapper(trial):
             try:
-                return get_parameter_space(
+                return asyncio.run(get_parameter_space(
                     trial=trial,
                     strategy_name=strategy_name
-                )
+                ))
             except Exception as e:
                 master_logger.error(f"❌ Trial {trial.number} failed: {e}")
                 raise optuna.TrialPruned()
@@ -241,10 +241,10 @@ class MasterOptimizer:
             # Window-specific objective function
             def window_objective(trial):
                 try:
-                    return get_parameter_space(
+                    return asyncio.run(get_parameter_space(
                         trial=trial,
                         strategy_name=strategy_name
-                    )
+                    ))
                 except Exception as e:
                     master_logger.error(f"❌ Window {window_name} trial {trial.number} failed: {e}")
                     raise optuna.TrialPruned()

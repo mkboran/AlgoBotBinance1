@@ -52,6 +52,9 @@ warnings.filterwarnings('ignore')
 # CORE SYSTEM IMPORTS
 # ==================================================================================
 
+CORE_IMPORTS_SUCCESS = False
+IMPORT_ERROR = None
+
 try:
     # Basic utilities
     from utils.config import settings
