@@ -103,25 +103,25 @@ Proje, sorumlulukların net bir şekilde ayrıldığı modüler bir yapıya sahi
 
 Projenin mevcut durumunu ve potansiyelini göz önünde bulundurarak aşağıdaki aşamalı geliştirme planını öneriyorum:
 
-**Aşama 1: Stabilizasyon ve Tamamlama (Mevcut Hataların Giderilmesi ve Eksiklerin Kapatılması)**
-1.  **Canlı İşlem Entegrasyonu:** `portfolio.py` içine gerçek `ccxt` emir gönderme/iptal etme fonksiyonlarının eklenmesi.
-2.  **Test Kapsamının Artırılması:** `pytest-cov` kurularak test kapsamının en az %85'e çıkarılması. Özellikle `utils` ve `strategies` klasörlerine odaklanılmalı.
-3.  **Merkezi Veri İndirici:** `main.py`'e `download-data` komutu eklenerek, `utils/data_downloader.py` üzerinden veri indirme işleminin standartlaştırılması.
+**Aşama 1: ML Temelinin Atılması (Tamamlandı)**
+1.  **Eğitim Verisi Oluşturma Script'i:** `scripts/generate_training_data.py` oluşturuldu ve onaylandı.
+2.  **Model Eğitme Script'i:** `scripts/train_models.py` oluşturuldu ve onaylandı.
 
-**Aşama 2: Optimizasyon ve ML Modellerinin Eğitilmesi**
-1.  **ML Model Eğitimi:** Her strateji (`bollinger_ml`, `rsi_ml` vb.) için ayrı `Jupyter Notebook` veya Python script'leri oluşturularak modellerin eğitilmesi ve `ml_models/` klasörüne kaydedilmesi.
-2.  **Optimizasyon Süreçlerinin İyileştirilmesi:** `ultimate_optimizer_optimized.py` script'inin, tüm stratejileri sırayla veya paralel olarak optimize edecek şekilde `main.py`'e entegre edilmesi.
-3.  **Performans Analizi:** `ml_vs_noml_comparison.py` script'i kullanılarak, eğitilen modellerin strateji performansına olan etkisinin detaylı bir şekilde raporlanması.
+**Aşama 2: Tam Entegrasyon ve Doğrulama (Tamamlandı)**
+1.  **`StrategyCoordinator` Entegrasyonu:** `main.py`'de `--strategy all` desteği eklendi.
+2.  **`AdaptiveParameterEvolution` Entegrasyonu:** `main.py`'deki canlı döngüye periyodik kontrol eklendi.
+3.  **`AISignalProvider` Entegrasyonu:** `main.py` ve `utils/strategy_coordinator.py` güncellenerek AI duyarlılık analizi entegre edildi.
 
-**Aşama 3: Yeni Özellikler ve Genişleme**
-1.  **Yeni Stratejiler Geliştirme:** `strategy_inheritance_guide.py` rehberi kullanılarak, Arbitraj, İstatistiksel Arbitraj veya Haber Duyarlılığına dayalı yeni stratejilerin eklenmesi.
-2.  **AI Signal Provider Entegrasyonu:** `utils/ai_signal_provider.py` modülünün, `StrategyCoordinator`'a entegre edilerek, LLM'lerden gelen piyasa duyarlılığı analizlerinin, strateji kararlarında bir filtre veya ağırlıklandırma faktörü olarak kullanılması.
-3.  **Gelişmiş Raporlama:** Geri test ve optimizasyon sonuçlarını PDF veya HTML formatında raporlayan bir modül eklenmesi. `main.py`'e `report` komutu eklenebilir.
+**Aşama 3: Sağlam Test Altyapısı (Devam Ediyor)**
+1.  **Test Kapsamı (Coverage) Analizi:** `pytest-cov` ile deneme başlatıldı.
+    *   **Sorunlar:** `requirements.txt` dosyasında `sqlite3`, `pickle5`, `concurrent.futures`, `threading`, `shutil`, `pyrisk`, `glob`, `json` gibi standart kütüphane paketleri ve bulunamayan/uyumsuz paketler (`pyrisk`) listelenmişti. Bu girdiler temizlendi.
+    *   `ta-lib` ve `thriftpy2` gibi bazı paketlerin derlenmesi için Microsoft Visual C++ Build Tools gerektiği tespit edildi. Bu araçların kurulumu tarafınızca yapıldı.
+    *   Son `pip install` komutu kullanıcı tarafından iptal edildi.
+    *   **Sonraki Adım:** Sistem yeniden başlatıldıktan sonra bağımlılıkların yeniden yüklenmesi ve `pytest --cov` komutunun tekrar çalıştırılması.
 
-**Aşama 4: Kod Kalitesi ve Bakım**
-1.  **Gereksiz Dosyaların Temizlenmesi:** Proje olgunlaştıkça, artık kullanılmayan veya eskiyen dosyaların (`archive` klasörü gibi) periyodik olarak gözden geçirilip temizlenmesi.
-2.  **Kod Formatlama ve Linting:** `black` ve `flake8` gibi araçların bir pre-commit hook'u olarak eklenerek kod kalitesinin sürekli olarak yüksek tutulması.
-3.  **Dokümantasyonun Güncellenmesi:** Eklenen her yeni özellik veya strateji için `docs/` klasöründeki dokümanların güncellenmesi.
+**Aşama 4: İleri Düzey Geri Test ve Optimizasyon (Beklemede)**
+
+**Aşama 5: Canlı Paper Trading Simülasyonu (Beklemede)**
 
 ---
 
@@ -146,3 +146,19 @@ Bu bölüm, geliştirme sürecinde atılan adımları, çalıştırılan komutla
         ```bash
         python scripts/train_models.py --data-path ml_data/momentum_training_data.csv --model-output-path ml_models/momentum_model.pkl --model-type xgboost
         ```
+
+### Aşama 2: Tam Entegrasyon ve Doğrulama
+
+*   **Adım 1: `StrategyCoordinator` Entegrasyonu**
+    *   **Durum:** ✅ Tamamlandı (`main.py`'de `--strategy all` desteği eklendi).
+*   **Adım 2: `AdaptiveParameterEvolution` Entegrasyonu**
+    *   **Durum:** ✅ Tamamlandı (`main.py`'deki canlı döngüye periyodik kontrol eklendi).
+*   **Adım 3: `AISignalProvider` Entegrasyonu**
+    *   **Durum:** ✅ Tamamlandı (`main.py` ve `utils/strategy_coordinator.py` güncellenerek AI duyarlılık analizi entegre edildi).
+
+### Aşama 3: Sağlam Test Altyapısı
+
+*   **Adım 1: Test Kapsamı (Coverage) Analizi**
+    *   **Durum:** ⏳ Devam Ediyor (Bağımlılık sorunları gideriliyor).
+    *   **Komut:** `venv\Scripts\python.exe -m pytest --cov=. --cov-report=html`
+    *   **Notlar:** `requirements.txt` dosyasından `sqlite3`, `pickle5`, `concurrent.futures`, `threading`, `shutil`, `pyrisk`, `glob`, `json` gibi standart kütüphane paketleri ve bulunamayan/uyumsuz paketler (`pyrisk`) kaldırıldı. `ta-lib` ve `thriftpy2` gibi bazı paketlerin derlenmesi için Microsoft Visual C++ Build Tools gerektiği tespit edildi ve kurulumu tarafınızca yapıldı. Son `pip install` komutu kullanıcı tarafından iptal edildi. Sistem yeniden başlatıldıktan sonra bağımlılıkların yeniden yüklenmesi ve `pytest --cov` komutunun tekrar çalıştırılması gerekmektedir.
