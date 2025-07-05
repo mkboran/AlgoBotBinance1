@@ -45,6 +45,36 @@ CORE_IMPORTS_SUCCESS = False
 IMPORT_ERROR = None
 ADVANCED_BACKTEST_AVAILABLE = False
 
+
+# Global variables - defined before imports
+CORE_IMPORTS_SUCCESS = False
+IMPORT_ERROR = None
+ADVANCED_BACKTEST_AVAILABLE = False
+
+
+# Global variables - defined before imports
+CORE_IMPORTS_SUCCESS = False
+IMPORT_ERROR = None
+ADVANCED_BACKTEST_AVAILABLE = False
+
+
+# Global variables - defined before imports
+CORE_IMPORTS_SUCCESS = False
+IMPORT_ERROR = None
+ADVANCED_BACKTEST_AVAILABLE = False
+
+
+# Global variables - defined before imports
+CORE_IMPORTS_SUCCESS = False
+IMPORT_ERROR = None
+ADVANCED_BACKTEST_AVAILABLE = False
+
+
+# Global variables - defined before imports
+CORE_IMPORTS_SUCCESS = False
+IMPORT_ERROR = None
+ADVANCED_BACKTEST_AVAILABLE = False
+
 import asyncio
 from typing import Optional, Any, Dict
 import argparse

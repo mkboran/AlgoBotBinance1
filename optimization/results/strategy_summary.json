@@ -2,10 +2,10 @@
   "strategies": {
     "momentum": {
       "parameter_count": 6,
-      "last_updated": "2025-07-04T22:54:52.635419+00:00",
+      "last_updated": "2025-07-05T00:39:03.656144+00:00",
       "best_score": 26.8,
       "file_version": "1.0"
     }
   },
-  "last_updated": "2025-07-04T22:54:52.652162+00:00"
+  "last_updated": "2025-07-05T00:39:03.668621+00:00"
 }

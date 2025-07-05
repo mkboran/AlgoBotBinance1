@@ -775,6 +775,12 @@ ADVANCED_BACKTEST_AVAILABLE = False
     def run_tests(self) -> bool:
         """Testleri çalıştır"""
         try:
+            # Remove AUTO_FIX_BACKUPS directory before running tests
+            backup_root = self.project_root / "AUTO_FIX_BACKUPS"
+            if backup_root.exists():
+                shutil.rmtree(backup_root)
+                logger.info(f"✅ Removed old backup directory: {backup_root}")
+
             logger.info("\n🧪 Running tests...")
             
             # pytest komutunu çalıştır
