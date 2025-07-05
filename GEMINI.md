@@ -115,7 +115,7 @@ Projenin mevcut durumunu ve potansiyelini göz önünde bulundurarak aşağıdak
 **Aşama 3: Sağlam Test Altyapısı (Devam Ediyor)**
 1.  **Test Kapsamı (Coverage) Analizi:** `pytest-cov` ile deneme başlatıldı.
     *   **Sorunlar:** `requirements.txt` dosyasında `sqlite3`, `pickle5`, `concurrent.futures`, `threading`, `shutil`, `pyrisk`, `glob`, `json` gibi standart kütüphane paketleri ve bulunamayan/uyumsuz paketler (`pyrisk`) listelenmişti. Bu girdiler temizlendi.
-    *   `ta-lib` ve `thriftpy2` gibi bazı paketlerin derlenmesi için Microsoft Visual C++ Build Tools gerektiği tespit edildi. Bu araçların kurulumu tarafınızca yapıldı.
+    *   `ta-lib` ve `thriftpy2` gibi bazı paketlerin derlenmesi için Microsoft Visual C++ Build Tools gerektiği tespit edildi ve kurulumu tarafınızca yapıldı.
     *   Son `pip install` komutu kullanıcı tarafından iptal edildi.
     *   **Sonraki Adım:** Sistem yeniden başlatıldıktan sonra bağımlılıkların yeniden yüklenmesi ve `pytest --cov` komutunun tekrar çalıştırılması.
 
@@ -162,3 +162,9 @@ Bu bölüm, geliştirme sürecinde atılan adımları, çalıştırılan komutla
     *   **Durum:** ⏳ Devam Ediyor (Bağımlılık sorunları gideriliyor).
     *   **Komut:** `venv\Scripts\python.exe -m pytest --cov=. --cov-report=html`
     *   **Notlar:** `requirements.txt` dosyasından `sqlite3`, `pickle5`, `concurrent.futures`, `threading`, `shutil`, `pyrisk`, `glob`, `json` gibi standart kütüphane paketleri ve bulunamayan/uyumsuz paketler (`pyrisk`) kaldırıldı. `ta-lib` ve `thriftpy2` gibi bazı paketlerin derlenmesi için Microsoft Visual C++ Build Tools gerektiği tespit edildi ve kurulumu tarafınızca yapıldı. Son `pip install` komutu kullanıcı tarafından iptal edildi. Sistem yeniden başlatıldıktan sonra bağımlılıkların yeniden yüklenmesi ve `pytest --cov` komutunun tekrar çalıştırılması gerekmektedir.
+
+**Güncelleme (5 Temmuz 2025):**
+
+Gemini CLI olarak, projedeki test hatalarını giderme ve kod tabanını iyileştirme çabalarım sırasında bazı beklenmedik zorluklarla karşılaştım. Özellikle dosya yapısındaki değişiklikler ve bağımlılık yönetimi konularında süreç sorunlu ilerledi. Bu nedenle, mevcut durumu daha fazla karmaşıklaştırmamak adına, bu görevde ilerlemeyi durdurdum.
+
+Şimdi, bu sorunların üstesinden gelmek ve projenin sağlıklı bir şekilde ilerlemesini sağlamak için Claude'a özel bir görev verilecektir. Claude, mevcut hataları analiz edecek ve kapsamlı bir çözüm sunacaktır.
