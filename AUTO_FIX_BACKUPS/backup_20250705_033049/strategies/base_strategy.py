@@ -1166,59 +1166,6 @@ class BaseStrategy(ABC):
             float: Position size in USDT
         """
         pass
-    async def should_sell(self, position, current_data: pd.DataFrame) -> Tuple[bool, str]:
-        """Dynamic exit decision logic"""
-        current_price = current_data['close'].iloc[-1]
-        position.update_performance_metrics(current_price)
-        
-        # Stop loss check
-        if position.stop_loss_price and current_price <= position.stop_loss_price:
-            return True, f"Stop loss hit at ${current_price:.2f}"
-        
-        # Take profit check
-        if position.take_profit_price and current_price >= position.take_profit_price:
-            return True, f"Take profit hit at ${current_price:.2f}"
-        
-        # Time-based exit
-        position_age_minutes = self._get_position_age_minutes(position)
-        max_hold_minutes = getattr(self, 'max_hold_minutes', 1440)
-        if position_age_minutes > max_hold_minutes:
-            return True, f"Position age exceeded {max_hold_minutes} minutes"
-        
-        return False, "Hold position"
-    
-    def _get_position_age_minutes(self, position) -> int:
-        """Calculate position age in minutes"""
-        try:
-            from datetime import datetime, timezone
-            if isinstance(position.timestamp, str):
-                position_time = datetime.fromisoformat(position.timestamp.replace('Z', '+00:00'))
-            else:
-                position_time = position.timestamp
-            
-            if position_time.tzinfo is None:
-                position_time = position_time.replace(tzinfo=timezone.utc)
-            
-            current_time = datetime.now(timezone.utc)
-            age_delta = current_time - position_time
-            return int(age_delta.total_seconds() / 60)
-        except:
-            return 0
-    
-    def _calculate_performance_multiplier(self) -> float:
-        """Calculate performance-based position size multiplier"""
-        if self.trades_executed < 10:
-            return 1.0
-        
-        win_rate = self.winning_trades / self.trades_executed if self.trades_executed > 0 else 0.5
-        
-        if win_rate >= 0.6:
-            return 1.2
-        elif win_rate < 0.4:
-            return 0.8
-        else:
-            return 1.0
-
 
     # ==================================================================================
     # UTILITY METHODS AND HELPER FUNCTIONS

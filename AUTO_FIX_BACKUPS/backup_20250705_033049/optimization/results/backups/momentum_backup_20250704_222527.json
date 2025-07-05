@@ -1,0 +1,79 @@
+{
+  "strategy_name": "momentum",
+  "version": "1.0",
+  "timestamp": "2025-07-04T22:23:20.605884+00:00",
+  "parameters": {
+    "ema_short": 13,
+    "ema_medium": 21,
+    "ema_long": 56,
+    "rsi_period": 14,
+    "max_positions": 3,
+    "base_position_size_pct": 25.0
+  },
+  "optimization_info": {
+    "optimization_date": "2025-07-04T22:23:20.605884+00:00",
+    "optimizer_version": "Ultimate Optimizer v2.0",
+    "best_score": 26.8
+  },
+  "metadata": {
+    "parameter_count": 6,
+    "last_updated": "2025-07-04T22:23:20.605884+00:00",
+    "created_by": "Phoenix Optimization System",
+    "file_format_version": "2.0",
+    "backup_created": true
+  },
+  "parameter_details": {
+    "ema_short": {
+      "value": 13,
+      "type": "int",
+      "last_updated": "2025-07-04T22:23:20.605884+00:00",
+      "source": "optimization",
+      "validation_status": "valid"
+    },
+    "ema_medium": {
+      "value": 21,
+      "type": "int",
+      "last_updated": "2025-07-04T22:23:20.605884+00:00",
+      "source": "optimization",
+      "validation_status": "valid"
+    },
+    "ema_long": {
+      "value": 56,
+      "type": "int",
+      "last_updated": "2025-07-04T22:23:20.605884+00:00",
+      "source": "optimization",
+      "validation_status": "valid"
+    },
+    "rsi_period": {
+      "value": 14,
+      "type": "int",
+      "last_updated": "2025-07-04T22:23:20.605884+00:00",
+      "source": "optimization",
+      "validation_status": "valid"
+    },
+    "max_positions": {
+      "value": 3,
+      "type": "int",
+      "last_updated": "2025-07-04T22:23:20.605884+00:00",
+      "source": "optimization",
+      "validation_status": "valid"
+    },
+    "base_position_size_pct": {
+      "value": 25.0,
+      "type": "float",
+      "last_updated": "2025-07-04T22:23:20.605884+00:00",
+      "source": "optimization",
+      "validation_status": "valid"
+    }
+  },
+  "validation_rules": {},
+  "performance_history": [
+    {
+      "timestamp": "2025-07-04T22:23:20.605884+00:00",
+      "metrics": {
+        "best_score": 26.8
+      },
+      "parameter_hash": "601585b5"
+    }
+  ]
+}

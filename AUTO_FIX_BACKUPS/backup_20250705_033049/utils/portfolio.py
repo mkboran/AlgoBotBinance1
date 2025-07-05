@@ -207,9 +207,6 @@ class Portfolio:
     """💰 MOMENTUM ULTRA OPTIMIZED Portfolio Management System"""
     
     def __init__(self, initial_capital_usdt: float):
-        # Logger initialization
-        self.logger = logging.getLogger("algobot.portfolio")
-
         self.initial_capital_usdt = initial_capital_usdt
         self.available_usdt = initial_capital_usdt
         self.positions: List[Position] = []
