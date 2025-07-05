@@ -1,4 +1,5 @@
 # utils/portfolio.py - MOMENTUM ULTRA OPTIMIZED VERSION
+import logging
 import uuid
 from typing import List, Dict, Optional, Any, Tuple
 from datetime import datetime, timezone
