@@ -1,0 +1,12 @@
+{
+  "strategy_name": "momentum",
+  "parameters": {
+    "ema_short": 13,
+    "ema_medium": 21,
+    "ema_long": 56,
+    "rsi_period": 14,
+    "max_positions": 3,
+    "base_position_size_pct": 25.0
+  },
+  "last_updated": "2025-07-06T01:06:59.942465+00:00"
+}

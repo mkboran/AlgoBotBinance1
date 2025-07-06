@@ -1219,6 +1219,108 @@ class BaseStrategy(ABC):
         else:
             return 1.0
 
+    def should_sell(self, position: 'Position', current_price: float, 
+                current_time: datetime) -> Tuple[bool, str]:
+        """
+         Determine if position should be closed - UNIVERSAL EXIT LOGIC
+        
+        Bu metod tüm stratejilerin kullanabileceği temel çıkış mantığını içerir:
+        - Stop-loss kontrolü
+        - Take-profit kontrolü  
+        - Trailing stop kontrolü
+        - Max holding time kontrolü
+        - Dynamic exit (opsiyonel)
+        
+        Stratejiler bu metodu override ederek kendi özel çıkış mantıklarını ekleyebilir.
+        """
+        
+        # Pozisyon yaşını hesapla
+        position_age_minutes = self._get_position_age_minutes(position, current_time)
+        
+        # Kar/zarar yüzdesini hesapla
+        entry_price = position.entry_price
+        pnl_pct = ((current_price - entry_price) / entry_price) * 100
+        
+        # 1. STOP-LOSS KONTROLÜ
+        if position.stop_loss_price and current_price <= position.stop_loss_price:
+            return True, f"STOP_LOSS_HIT @ ${current_price:.2f} ({pnl_pct:.2f}%)"
+        
+        # 2. TAKE-PROFIT KONTROLÜ
+        if position.take_profit_price and current_price >= position.take_profit_price:
+            return True, f"TAKE_PROFIT_HIT @ ${current_price:.2f} ({pnl_pct:.2f}%)"
+        
+        # 3. TRAILING STOP KONTROLÜ
+        if hasattr(position, 'trailing_stop_active') and position.trailing_stop_active:
+            trailing_updated, new_stop = position.update_trailing_stop(current_price)
+            if trailing_updated and new_stop:
+                position.stop_loss_price = new_stop
+                
+        # 4. MAX HOLDING TIME KONTROLÜ (varsayılan: 24 saat)
+        max_hold_minutes = getattr(self, 'max_hold_minutes', 1440)  # 24 saat
+        if position_age_minutes > max_hold_minutes:
+            return True, f"MAX_HOLD_TIME_EXCEEDED ({position_age_minutes:.0f} min > {max_hold_minutes} min)"
+        
+        # 5. DYNAMIC EXIT KONTROLÜ (opsiyonel)
+        if self.dynamic_exit_enabled:
+            # Performans çarpanını hesapla
+            perf_multiplier = self._calculate_performance_multiplier()
+            
+            # Minimum kar hedefi (performansa göre dinamik)
+            min_profit_target = self.min_profit_target_pct * perf_multiplier
+            
+            # Dinamik çıkış fazları
+            if position_age_minutes < 60:  # İlk 60 dakika
+                exit_threshold = min_profit_target * 1.5
+            elif position_age_minutes < 120:  # 60-120 dakika
+                exit_threshold = min_profit_target * 1.0
+            else:  # 120+ dakika
+                exit_threshold = min_profit_target * 0.5
+                
+            if pnl_pct >= exit_threshold:
+                return True, f"DYNAMIC_EXIT_PROFIT @ ${current_price:.2f} ({pnl_pct:.2f}% > {exit_threshold:.2f}%)"
+        
+        # 6. BREAKEVEN STOP (pozisyon kârdaysa ve belirli süre geçtiyse)
+        breakeven_minutes = getattr(self, 'breakeven_minutes', 30)
+        if position_age_minutes > breakeven_minutes and pnl_pct > 0:
+            # Stop-loss'u entry price'a çek
+            if not position.stop_loss_price or position.stop_loss_price < entry_price:
+                position.stop_loss_price = entry_price
+                self.logger.info(f" Breakeven stop activated for position {position.position_id}")
+        
+        # Varsayılan: pozisyonu tutmaya devam et
+        return False, "HOLD"
+
+    def _get_position_age_minutes(self, position, current_time) -> int:
+        """Calculate position age in minutes"""
+        try:
+            from datetime import datetime, timezone
+            if isinstance(position.timestamp, str):
+                position_time = datetime.fromisoformat(position.timestamp.replace('Z', '+00:00'))
+            else:
+                position_time = position.timestamp
+            
+            if position_time.tzinfo is None:
+                position_time = position_time.replace(tzinfo=timezone.utc)
+            
+            age_delta = current_time - position_time
+            return int(age_delta.total_seconds() / 60)
+        except:
+            return 0
+    
+    def _calculate_performance_multiplier(self) -> float:
+        """Calculate performance-based position size multiplier"""
+        if not hasattr(self, 'trades_executed') or self.trades_executed < 10:
+            return 1.0
+        
+        win_rate = self.winning_trades / self.trades_executed if self.trades_executed > 0 else 0.5
+        
+        if win_rate >= 0.6:
+            return 1.2
+        elif win_rate < 0.4:
+            return 0.8
+        else:
+            return 1.0
+
 
     # ==================================================================================
     # UTILITY METHODS AND HELPER FUNCTIONS
@@ -1324,35 +1426,96 @@ class BaseStrategy(ABC):
         return (f"<{self.__class__.__name__}: {self.strategy_name}, "
                 f"{self.state.value}, {len(self.portfolio.positions)} positions>")
 
+    def create_signal(self, signal_type: SignalType, confidence: float, 
+                 price: float, reasons: List[str], 
+                 metadata: Optional[Dict[str, Any]] = None) -> TradingSignal:
+        """
+         Create standardized trading signal
+        
+        Bu metod tüm stratejilerin kullanabileceği standart bir sinyal oluşturur.
+        Metadata ile ek bilgiler (quality_score, momentum_strength vb.) eklenebilir.
+        """
+        
+        # Confidence değerini 0-1 aralığında sınırla
+        confidence = max(0.0, min(1.0, confidence))
+        
+        # Metadata yoksa boş dict oluştur
+        if metadata is None:
+            metadata = {}
+        
+        # Stratejiye özgü bilgileri ekle
+        metadata.update({
+            'strategy_name': self.strategy_name,
+            'symbol': self.symbol,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'market_regime': self.current_market_regime.value if hasattr(self, 'current_market_regime') else 'unknown'
+        })
+        
+        # TradingSignal oluştur
+        signal = TradingSignal(
+            signal_type=signal_type,
+            confidence=confidence,
+            price=price,
+            timestamp=datetime.now(timezone.utc),
+            reasons=reasons,
+            metadata=metadata
+        )
+        
+        # Signal logging
+        self.logger.info(f" Signal created: {signal_type.value} @ ${price:.2f} "
+                        f"(Confidence: {confidence:.2%}) - {', '.join(reasons[:2])}")
+        
+        return signal
 
 # ==================================================================================
 # HELPER FUNCTIONS FOR STRATEGY CREATION
 # ==================================================================================
 
-def create_signal(signal_type: SignalType, 
-                 confidence: float, 
-                 price: float, 
-                 reasons: List[str] = None,
-                 metadata: Dict[str, Any] = None,
-                 dynamic_exit_info: Dict[str, Any] = None,
-                 kelly_size_info: Dict[str, Any] = None,
-                 global_market_context: Dict[str, Any] = None) -> TradingSignal:
+def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, pd.Series]:
     """
-    🎯 Create enhanced trading signal with FAZ 2 context
+    📊 Calculate common technical indicators
     
-    Utility function to standardize signal creation across all strategies
+    Utility function providing standardized technical analysis across strategies
     """
-    return TradingSignal(
-        signal_type=signal_type,
-        confidence=confidence,
-        price=price,
-        timestamp=datetime.now(timezone.utc),
-        reasons=reasons or [],
-        metadata=metadata or {},
-        dynamic_exit_info=dynamic_exit_info,
-        kelly_size_info=kelly_size_info,
-        global_market_context=global_market_context
-    )
+    try:
+        indicators = {}
+        
+        # Moving averages
+        indicators['ema_12'] = df['close'].ewm(span=12).mean()
+        indicators['ema_26'] = df['close'].ewm(span=26).mean()
+        indicators['sma_50'] = df['close'].rolling(50).mean()
+        indicators['sma_200'] = df['close'].rolling(200).mean()
+        
+        # RSI
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        indicators['rsi'] = 100 - (100 / (1 + rs))
+        
+        # MACD
+        ema_12 = df['close'].ewm(span=12).mean()
+        ema_26 = df['close'].ewm(span=26).mean()
+        indicators['macd'] = ema_12 - ema_26
+        indicators['macd_signal'] = indicators['macd'].ewm(span=9).mean()
+        indicators['macd_histogram'] = indicators['macd'] - indicators['macd_signal']
+        
+        # Bollinger Bands
+        sma_20 = df['close'].rolling(20).mean()
+        std_20 = df['close'].rolling(20).std()
+        indicators['bb_upper'] = sma_20 + (std_20 * 2)
+        indicators['bb_lower'] = sma_20 - (std_20 * 2)
+        indicators['bb_middle'] = sma_20
+        
+        # Volume indicators
+        indicators['volume_sma'] = df['volume'].rolling(20).mean()
+        indicators['volume_ratio'] = df['volume'] / indicators['volume_sma']
+        
+        return indicators
+        
+    except Exception as e:
+        logger.error(f"Technical indicators calculation error: {e}")
+        return {}
 
 
 def calculate_technical_indicators(df: pd.DataFrame) -> Dict[str, pd.Series]:

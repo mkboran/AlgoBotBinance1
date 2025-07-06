@@ -1,24 +1,28 @@
 {
   "strategy_name": "momentum",
   "version": "2.0",
-  "timestamp": "2025-07-06T01:06:59.942465+00:00",
+  "timestamp": "2025-07-06T01:06:22.878877+00:00",
   "parameters": {
     "ema_short": 13,
     "ema_medium": 21,
     "ema_long": 56,
     "rsi_period": 14,
     "max_positions": 3,
-    "base_position_size_pct": 25.0
+    "base_position_size_pct": 25.0,
+    "max_loss_pct": 10.0,
+    "ml_confidence_threshold": 0.65
   },
   "metrics": {
     "best_score": 26.8,
-    "timestamp": "2025-07-06T01:06:59.942465+00:00"
+    "total_trials": 1000,
+    "optimization_duration_minutes": 45.5,
+    "timestamp": "2025-07-06T01:06:22.878877+00:00"
   },
   "metadata": {
     "optimization_date": "2025-07-06",
-    "optimization_time": "01:06:59 UTC",
+    "optimization_time": "01:06:22 UTC",
     "platform": "Phoenix Trading System v2.0",
-    "parameter_count": 6
+    "parameter_count": 8
   },
   "validation": {
     "validated": false,
